@@ -429,7 +429,6 @@
     </div>
   </div>
 
-  <!-- Popup Modal for Entering Requested Target Date -->
   <div class="modal-backdrop" id="datePopupModal">
     <div class="modal popup-small">
       <h3>Request Target Date Change</h3>
@@ -457,7 +456,29 @@
     let statusChartInst = null;
     let respChartInst = null;
 
-    document.getElementById('cDate').valueAsDate = new Date();
+    function getTodayDateStr() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function extractDateStr(val) {
+      if (!val) return '';
+      const s = String(val).trim();
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : '';
+    }
+
+    function parseLocalDate(dateStr) {
+      const clean = extractDateStr(dateStr);
+      if (!clean) return null;
+      const parts = clean.split('-').map(Number);
+      return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+    }
+
+    document.getElementById('cDate').value = getTodayDateStr();
 
     document.addEventListener('click', function () {
       const menu = document.getElementById('msRespMenu');
@@ -715,11 +736,10 @@
 
     function computeEffectiveStatus(r) {
       if (r.Status === 'Completed') return 'Completed';
-      if (r.Target_Date) {
-        const target = new Date(r.Target_Date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (!isNaN(target.getTime()) && target < today) return 'Overdue';
+      const targetDate = parseLocalDate(r.Target_Date);
+      if (targetDate) {
+        const todayDate = parseLocalDate(getTodayDateStr());
+        if (targetDate < todayDate) return 'Overdue';
       }
       return r.Status || 'New';
     }
@@ -857,14 +877,14 @@
             <tr>
               <td>${escapeHtml(String(r.ID))}</td>
               <td>${escapeHtml(String(r.Plant || ''))}</td>
-              <td>${escapeHtml(String(r.Report_Date || '').slice(0, 10))}</td>
+              <td>${escapeHtml(extractDateStr(r.Report_Date))}</td>
               <td>${escapeHtml(String(r.Observation || ''))}</td>
               <td>${escapeHtml(String(r.Observer || ''))}</td>
               <td>${escapeHtml(String(r.Area || ''))}</td>
               <td>${r.Evidence_URL ? `<a href="${escapeHtml(String(r.Evidence_URL))}" target="_blank" rel="noopener">View</a>` : '-'}</td>
               <td>${r.Correction_Evidence_URL ? `<a href="${escapeHtml(String(r.Correction_Evidence_URL))}" target="_blank" rel="noopener">View</a>` : '-'}</td>
               <td>${escapeHtml(String(r.Responsible_Person || ''))}</td>
-              <td>${escapeHtml(String(r.Target_Date || '').slice(0, 10))}</td>
+              <td>${escapeHtml(extractDateStr(r.Target_Date))}</td>
               <td class="${r.Effective_Status === 'Overdue' ? 'badge-overdue' : ''}">${escapeHtml(String(r.Effective_Status))}</td>
               <td><button class="btn btn-secondary" onclick="openEditModal('${escapeHtml(String(r.ID))}')">Edit</button></td>
             </tr>
@@ -902,6 +922,9 @@
 
     function openCreateModal() {
       populateUserDropdowns();
+      if (!document.getElementById('cDate').value) {
+        document.getElementById('cDate').value = getTodayDateStr();
+      }
       document.getElementById('createModal').style.display = 'flex';
     }
     function closeCreateModal() {
@@ -950,7 +973,7 @@
         }
 
         const data = {
-          Report_Date: document.getElementById('cDate').value,
+          Report_Date: extractDateStr(document.getElementById('cDate').value),
           Plant: plant,
           Requirement: document.getElementById('cReq').value.trim(),
           Area: document.getElementById('cArea').value.trim(),
@@ -959,7 +982,7 @@
           Observer_Email: isValidEmail(currentUser.email) ? normalizeEmail(currentUser.email) : '',
           Responsible_Person: resp,
           Responsible_Email: [...new Set(rawRespEmails)].join(', '),
-          Target_Date: document.getElementById('cTarget').value,
+          Target_Date: extractDateStr(document.getElementById('cTarget').value),
           Status: 'New',
           fileBase64, fileName, mimeType
         };
@@ -992,15 +1015,15 @@
       if (!rec) return;
       editingRecord = rec;
       const changeCount = Number(rec.Target_Change_Count || 0);
-      const currentTarget = String(rec.Target_Date || '').slice(0, 10);
-      const reqTarget = String(rec.Requested_Target_Date || '').slice(0, 10);
+      const currentTarget = extractDateStr(rec.Target_Date);
+      const reqTarget = extractDateStr(rec.Requested_Target_Date);
       const canRequest = isAssignedResponsibleUser(rec) || isAdminRole(currentUser.role);
 
       document.getElementById('eIdTitle').textContent = rec.ID;
       document.getElementById('eObs').value = rec.Observation || '';
       document.getElementById('eAction').value = rec.Corrective_Action || '';
       document.getElementById('eTarget').value = currentTarget;
-      document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
+      document.getElementById('eActual').value = extractDateStr(rec.Actual_Date);
       document.getElementById('eStatus').value = rec.Status || 'New';
       document.getElementById('eCorrFile').value = '';
 
@@ -1033,8 +1056,8 @@
 
     function openDateRequestPopup() {
       if (!editingRecord) return;
-      const currentTarget = String(editingRecord.Target_Date || '').slice(0, 10);
-      const existingReq = String(editingRecord.Requested_Target_Date || '').slice(0, 10);
+      const currentTarget = extractDateStr(editingRecord.Target_Date);
+      const existingReq = extractDateStr(editingRecord.Requested_Target_Date);
       document.getElementById('popupCurrentTargetText').textContent =
         `Current Target Date: ${currentTarget || '-'}`;
       document.getElementById('popupRequestedDate').value = existingReq || '';
@@ -1047,8 +1070,8 @@
 
     async function submitDateRequestPopup() {
       if (!editingRecord) return;
-      const proposedDate = document.getElementById('popupRequestedDate').value;
-      const prevTarget = String(editingRecord.Target_Date || '').slice(0, 10);
+      const proposedDate = extractDateStr(document.getElementById('popupRequestedDate').value);
+      const prevTarget = extractDateStr(editingRecord.Target_Date);
 
       if (!proposedDate) {
         alert('Please select the Requested Target Date.');
@@ -1088,8 +1111,8 @@
       if (!editingRecord) return;
       const btn = document.getElementById('btnSaveUpdate');
       const changeCount = Number(editingRecord.Target_Change_Count || 0);
-      const prevTarget = String(editingRecord.Target_Date || '').slice(0, 10);
-      const newTarget = document.getElementById('eTarget').value;
+      const prevTarget = extractDateStr(editingRecord.Target_Date);
+      const newTarget = extractDateStr(document.getElementById('eTarget').value);
 
       if (changeCount >= 1 && newTarget && newTarget !== prevTarget && !isAdminRole(currentUser.role)) {
         alert('Target date has already been changed once. Please click "Request Approval (Date Change)" to choose your new requested date.');
@@ -1114,7 +1137,7 @@
             ID: editingRecord.ID,
             Corrective_Action: document.getElementById('eAction').value,
             Target_Date: newTarget,
-            Actual_Date: document.getElementById('eActual').value,
+            Actual_Date: extractDateStr(document.getElementById('eActual').value),
             Status: document.getElementById('eStatus').value,
             corrFileBase64,
             corrFileName,
@@ -1140,8 +1163,8 @@
       btnApprove.disabled = true;
       btnReject.disabled = true;
       try {
-        const reqTarget = String(editingRecord.Requested_Target_Date || '').slice(0, 10);
-        const appliedDate = reqTarget || document.getElementById('eTarget').value;
+        const reqTarget = extractDateStr(editingRecord.Requested_Target_Date);
+        const appliedDate = reqTarget || extractDateStr(document.getElementById('eTarget').value);
         const payloadData = {
           ID: editingRecord.ID,
           Approval_Requested: decision

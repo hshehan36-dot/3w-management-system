@@ -60,6 +60,7 @@
     .btn-primary { background: var(--success); color: #fff; }
     .btn-secondary { background: #e2e8f0; color: #0f172a; }
     .btn-warn { background: #f59e0b; color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
     .btn-dark { background: #1e293b; color: #fff; }
     .btn-admin { background: #fef08a; color: #0f172a; }
     .btn-chip { background: #f1f5f9; color: #0f172a; border: 1px solid var(--border); padding: 6px 10px; font-size: 12px; }
@@ -146,6 +147,7 @@
       background: #f8fafc; border: 1px dashed var(--border); border-radius: 6px; padding: 8px 10px;
       display: flex; flex-direction: column; gap: 6px;
     }
+    .admin-approval-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
     @media (max-width: 900px) {
       .main-grid, .charts-row, .form-grid { grid-template-columns: 1fr; }
     }
@@ -400,6 +402,14 @@
         </div>
         <div class="form-group" style="justify-content:flex-end;">
           <button class="btn btn-warn" id="btnRequestApproval" type="button" onclick="requestDateApproval()">Request Approval (Date Change)</button>
+        </div>
+
+        <div class="form-group full" id="adminDateApprovalActions" style="display:none;">
+          <label>Admin Date Change Decision</label>
+          <div class="admin-approval-row">
+            <button class="btn btn-primary" id="btnApproveDate" type="button" onclick="decideDateApproval('Approved')">Approve Date Change</button>
+            <button class="btn btn-danger" id="btnRejectDate" type="button" onclick="decideDateApproval('Rejected')">Reject Date Change</button>
+          </div>
         </div>
 
         <div class="form-group full">
@@ -965,6 +975,10 @@
       document.getElementById('eCorrFile').value = '';
       document.getElementById('eApprovalStatus').textContent = `Approval Status: ${rec.Approval_Requested || 'No'}`;
 
+      const showAdminDecision = isAdminRole(currentUser.role) &&
+        String(rec.Approval_Requested || '').trim().toLowerCase() === 'requested';
+      document.getElementById('adminDateApprovalActions').style.display = showAdminDecision ? 'flex' : 'none';
+
       document.getElementById('eObsEvidenceLink').innerHTML = rec.Evidence_URL
         ? `<a href="${escapeHtml(String(rec.Evidence_URL))}" target="_blank" rel="noopener">Open in Drive</a>`
         : '<span class="muted">No file attached</span>';
@@ -1040,6 +1054,37 @@
         alert('Approval request failed: ' + err.message);
       } finally {
         btn.disabled = false;
+      }
+    }
+
+    async function decideDateApproval(decision) {
+      if (!editingRecord || !isAdminRole(currentUser.role)) return;
+      const btnApprove = document.getElementById('btnApproveDate');
+      const btnReject = document.getElementById('btnRejectDate');
+      btnApprove.disabled = true;
+      btnReject.disabled = true;
+      try {
+        const payloadData = {
+          ID: editingRecord.ID,
+          Approval_Requested: decision
+        };
+        if (decision === 'Approved') {
+          payloadData.Target_Date = document.getElementById('eTarget').value;
+        }
+        await postToApi({
+          action: 'update3W',
+          data: payloadData
+        });
+        alert(`Target date change ${decision}!`);
+        closeEditModal();
+        await loadData();
+        setBanner(`Date change ${decision} for ID: ${editingRecord.ID}`, 'ok');
+      } catch (err) {
+        console.error(err);
+        alert('Decision update failed: ' + err.message);
+      } finally {
+        btnApprove.disabled = false;
+        btnReject.disabled = false;
       }
     }
 

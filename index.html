@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>3W Management System</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -18,43 +18,51 @@
       --warning: #d97706;
       --success: #16a34a;
     }
-    * { box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { margin: 0; background: var(--bg); color: var(--text); }
+    * { box-sizing: border-box; font-family: Arial, sans-serif; -webkit-tap-highlight-color: rgba(15, 118, 110, 0.15); }
+    body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; }
 
     .login-screen {
       position: fixed; inset: 0; background: linear-gradient(135deg, #0f766e, #1e293b);
       display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 16px;
     }
     .login-card {
-      background: #fff; width: 100%; max-width: 420px; border-radius: 10px; padding: 24px;
+      background: #fff; width: 100%; max-width: 420px; border-radius: 12px; padding: 22px;
       box-shadow: 0 12px 30px rgba(0,0,0,0.25);
     }
-    .login-card h2 { margin: 0 0 6px 0; color: var(--primary-dark); }
-    .login-card p { margin: 0 0 16px 0; font-size: 13px; color: var(--muted); }
+    .login-card h2 { margin: 0 0 6px 0; color: var(--primary-dark); font-size: 20px; }
+    .login-card p { margin: 0 0 16px 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
     .login-card label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
-    .login-card input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 14px; }
-    .login-card button { width: 100%; padding: 10px; font-size: 14px; }
+    .login-card input {
+      width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 16px; margin-bottom: 14px;
+    }
+    .login-card button { width: 100%; min-height: 44px; padding: 10px; font-size: 14px; }
 
     header {
-      background: var(--primary); color: #fff; padding: 10px 16px;
+      background: var(--primary); color: #fff; padding: 10px 14px;
       display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
     }
     header h1 { margin: 0; font-size: 18px; }
     .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .user-pill {
-      background: rgba(255,255,255,0.16); padding: 5px 10px; border-radius: 999px; font-size: 12px;
+      background: rgba(255,255,255,0.16); padding: 6px 10px; border-radius: 999px;
+      font-size: 12px; display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
     }
+    .user-pill span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
     .role-badge {
-      background: #fef08a; color: #0f172a; padding: 2px 7px; border-radius: 999px; font-weight: bold; margin-left: 4px;
+      background: #fef08a; color: #0f172a; padding: 2px 7px; border-radius: 999px; font-weight: bold; flex-shrink: 0;
     }
     .status-banner {
-      background: #e2e8f0; color: #0f172a; padding: 6px 16px; font-size: 12px;
-      display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);
+      background: #e2e8f0; color: #0f172a; padding: 7px 14px; font-size: 12px;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
     }
     .status-err { background: #fee2e2; color: #991b1b; font-weight: bold; }
     .status-ok { background: #dcfce7; color: #166534; }
     .btn {
-      border: none; padding: 7px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 13px;
+      border: none; min-height: 38px; padding: 8px 12px; border-radius: 6px;
+      cursor: pointer; font-weight: bold; font-size: 13px; display: inline-flex;
+      align-items: center; justify-content: center; gap: 4px;
     }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-primary { background: var(--success); color: #fff; }
@@ -63,94 +71,151 @@
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-dark { background: #1e293b; color: #fff; }
     .btn-admin { background: #fef08a; color: #0f172a; }
-    .btn-chip { background: #f1f5f9; color: #0f172a; border: 1px solid var(--border); padding: 6px 10px; font-size: 12px; }
+    .btn-chip {
+      background: #f1f5f9; color: #0f172a; border: 1px solid var(--border);
+      min-height: 36px; padding: 6px 11px; font-size: 12px; border-radius: 999px;
+    }
     .btn-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
     .filter-bar {
-      background: #fff; padding: 8px 16px; border-bottom: 1px solid var(--border);
+      background: #fff; padding: 10px 14px; border-bottom: 1px solid var(--border);
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
     }
     .quick-group { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     select, input {
-      padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff;
+      min-height: 38px; padding: 7px 9px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; background: #fff;
     }
 
     .ms-wrapper { position: relative; }
     .ms-trigger {
-      width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid var(--border);
-      border-radius: 4px; background: #fff; cursor: pointer; display: flex;
-      justify-content: space-between; align-items: center; gap: 6px; font-size: 13px; text-align: left;
+      width: 100%; min-height: 42px; padding: 6px 10px; border: 1px solid var(--border);
+      border-radius: 6px; background: #fff; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; text-align: left;
     }
-    .ms-tags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+    .ms-tags { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
     .ms-tag {
       background: #ccfbf1; color: #115e59; border: 1px solid #5eead4;
-      padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: bold;
+      padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: bold;
     }
     .ms-placeholder { color: var(--muted); font-size: 12px; }
     .ms-menu {
-      display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0;
-      background: #fff; border: 1px solid var(--border); border-radius: 6px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 1500; padding: 6px;
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #fff; border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18); z-index: 1500; padding: 8px;
     }
     .ms-menu.open { display: block; }
-    .ms-search { width: 100%; margin-bottom: 6px; font-size: 12px; padding: 5px 7px; }
-    .ms-options { max-height: 145px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+    .ms-search { width: 100%; margin-bottom: 8px; font-size: 14px; padding: 7px 9px; }
+    .ms-options {
+      max-height: 180px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      display: flex; flex-direction: column; gap: 4px;
+    }
     .multi-item {
-      display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: normal;
-      cursor: pointer; padding: 4px 6px; border-radius: 4px;
+      display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: normal;
+      cursor: pointer; padding: 7px 8px; border-radius: 6px; min-height: 38px;
     }
     .multi-item:hover { background: #f1f5f9; }
-    .multi-item input { margin: 0; cursor: pointer; }
+    .multi-item input { margin: 0; min-height: 18px; width: 18px; cursor: pointer; flex-shrink: 0; }
 
     .main-grid {
-      display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; padding: 12px 16px;
+      display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; padding: 12px 14px 24px;
     }
-    .left-col { display: flex; flex-direction: column; gap: 12px; }
-    .top-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .left-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .top-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .kpi-card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 8px; text-align: center;
     }
+    .kpi-card > div:first-child { font-size: 12px; color: var(--muted); font-weight: bold; }
     .kpi-val { font-size: 26px; font-weight: bold; margin-top: 4px; }
     .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .chart-box { position: relative; height: 220px; width: 100%; }
     .panel {
-      background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0;
     }
-    .panel h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--primary-dark); }
+    .panel h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--primary-dark); }
     .right-panel {
-      background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
       display: flex; flex-direction: column; gap: 8px; max-height: 82vh; overflow-y: auto;
+      -webkit-overflow-scrolling: touch; min-width: 0;
     }
+    .right-panel h3 { margin: 0; font-size: 14px; color: var(--primary-dark); }
     .id-card {
       border: 1px solid var(--border); border-left: 4px solid var(--primary);
-      border-radius: 5px; padding: 8px; cursor: pointer; background: #f8fafc;
+      border-radius: 6px; padding: 10px; cursor: pointer; background: #f8fafc; line-height: 1.4;
     }
-    .id-card:hover { background: #f1f5f9; }
+    .id-card:hover, .id-card:active { background: #f1f5f9; }
     .id-card-overdue { border-left-color: var(--danger); }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border: 1px solid var(--border); padding: 6px; text-align: left; }
-    th { background: #e2e8f0; }
+
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 780px; }
+    th, td { border: 1px solid var(--border); padding: 7px 8px; text-align: left; vertical-align: middle; }
+    th { background: #e2e8f0; white-space: nowrap; }
+
     .modal-backdrop {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-      justify-content: center; align-items: center; z-index: 999;
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      justify-content: center; align-items: center; z-index: 999; padding: 12px;
     }
     #datePopupModal { z-index: 1200; }
     .modal {
-      background: #fff; width: 92%; max-width: 680px; max-height: 90vh; overflow-y: auto;
-      border-radius: 8px; padding: 16px;
+      background: #fff; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto;
+      -webkit-overflow-scrolling: touch; border-radius: 10px; padding: 16px;
     }
+    .modal h3 { margin: 0 0 8px 0; font-size: 17px; color: var(--primary-dark); }
     .popup-small { max-width: 420px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
     .form-group label { font-size: 12px; font-weight: bold; }
     .full { grid-column: 1 / -1; }
     .badge-overdue { color: var(--danger); font-weight: bold; }
     .muted { color: var(--muted); font-size: 12px; }
     .evidence-box {
-      background: #f8fafc; border: 1px dashed var(--border); border-radius: 6px; padding: 8px 10px;
-      display: flex; flex-direction: column; gap: 6px;
+      background: #f8fafc; border: 1px dashed var(--border); border-radius: 8px; padding: 10px;
+      display: flex; flex-direction: column; gap: 6px; font-size: 13px;
     }
     .admin-approval-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .modal-footer-actions {
+      margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+    }
+
     @media (max-width: 900px) {
       .main-grid, .charts-row, .form-grid { grid-template-columns: 1fr; }
+      .right-panel { max-height: 360px; }
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 10px 12px; }
+      header h1 { font-size: 16px; width: 100%; }
+      .header-actions { width: 100%; gap: 6px; }
+      .header-actions .btn { flex: 1 1 auto; min-height: 40px; font-size: 12px; padding: 6px 8px; }
+      .user-pill { width: 100%; justify-content: space-between; }
+      .user-pill span:first-child { max-width: 210px; }
+
+      .filter-bar { padding: 8px 12px; gap: 6px; }
+      .quick-group { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); }
+      .btn-chip { width: 100%; min-height: 38px; padding: 6px; }
+      .filter-bar > select,
+      .filter-bar > button:not(.btn-chip) {
+        flex: 1 1 calc(50% - 4px);
+        min-width: 0;
+        min-height: 40px;
+      }
+
+      input, select, textarea { font-size: 16px; min-height: 42px; }
+      input[type="file"] { font-size: 13px; min-height: auto; padding: 6px 0; }
+
+      .main-grid { padding: 10px 12px 28px; gap: 10px; }
+      .top-row { gap: 8px; }
+      .kpi-card { padding: 10px 6px; }
+      .kpi-val { font-size: 22px; }
+      .chart-box { height: 195px; }
+      .right-panel { max-height: 320px; }
+
+      .modal-backdrop { align-items: flex-end; padding: 0; }
+      .modal {
+        max-height: 92vh; border-radius: 16px 16px 0 0; padding: 16px 14px 24px;
+      }
+      .modal-footer-actions .btn { flex: 1 1 auto; min-height: 44px; }
     }
   </style>
 </head>
@@ -160,7 +225,7 @@
       <h2>3W Management System</h2>
       <p>Enter your email to sign in. Role is assigned automatically (default: User).</p>
       <label for="loginEmailInput">Email Address *</label>
-      <input type="email" id="loginEmailInput" placeholder="name@company.com" required />
+      <input type="email" id="loginEmailInput" placeholder="name@company.com" autocomplete="email" required />
       <button class="btn btn-primary" id="btnLogin" type="button" onclick="handleLogin()">Continue with Email</button>
     </div>
   </div>
@@ -173,8 +238,8 @@
         <span class="role-badge" id="currentUserRole">User</span>
       </div>
       <button class="btn btn-admin" id="btnOpenAddUser" type="button" style="display:none;" onclick="openAddUserModal()">+ Add User</button>
-      <button class="btn btn-primary" id="btnOpenCreate" onclick="openCreateModal()">+ Add New 3W</button>
-      <button class="btn btn-secondary" id="btnRefresh" onclick="loadData()">Refresh</button>
+      <button class="btn btn-primary" id="btnOpenCreate" type="button" onclick="openCreateModal()">+ Add New 3W</button>
+      <button class="btn btn-secondary" id="btnRefresh" type="button" onclick="loadData()">Refresh</button>
       <button class="btn btn-dark" type="button" onclick="logout()">Switch User</button>
     </div>
   </header>
@@ -224,17 +289,21 @@
       <div class="charts-row">
         <div class="panel">
           <h3>Completion Status</h3>
-          <canvas id="statusChart" height="150"></canvas>
+          <div class="chart-box">
+            <canvas id="statusChart"></canvas>
+          </div>
         </div>
         <div class="panel">
           <h3>By Responsible Person</h3>
-          <canvas id="respChart" height="150"></canvas>
+          <div class="chart-box">
+            <canvas id="respChart"></canvas>
+          </div>
         </div>
       </div>
 
       <div class="panel">
         <h3>3W Tracker Table</h3>
-        <div style="overflow-x:auto;">
+        <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -281,7 +350,7 @@
           <input type="text" id="uPlant" list="plantDatalist" placeholder="e.g. BCEN" />
         </div>
       </div>
-      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+      <div class="modal-footer-actions">
         <button class="btn btn-secondary" type="button" onclick="closeAddUserModal()">Cancel</button>
         <button class="btn btn-primary" id="btnSubmitUser" type="button" onclick="submitAddUser()">Save User</button>
       </div>
@@ -349,10 +418,10 @@
         </div>
         <div class="form-group full">
           <label>Observation Evidence Attachment (Photo/File)</label>
-          <input type="file" id="cFile" />
+          <input type="file" id="cFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
         </div>
       </div>
-      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+      <div class="modal-footer-actions">
         <button class="btn btn-secondary" type="button" onclick="closeCreateModal()">Cancel</button>
         <button class="btn btn-primary" id="btnSubmitCreate" type="button" onclick="submitCreate3W()">Submit</button>
       </div>
@@ -415,14 +484,14 @@
 
         <div class="form-group full">
           <label>Correction Evidence Photo / File (Attach when updating / completing)</label>
-          <input type="file" id="eCorrFile" />
+          <input type="file" id="eCorrFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
         </div>
 
         <div class="form-group full">
           <span class="muted" id="eApprovalStatus">Approval Status: -</span>
         </div>
       </div>
-      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+      <div class="modal-footer-actions">
         <button class="btn btn-secondary" type="button" onclick="closeEditModal()">Close</button>
         <button class="btn btn-primary" id="btnSaveUpdate" type="button" onclick="saveUpdate3W()">Save Update</button>
       </div>
@@ -437,7 +506,7 @@
         <label for="popupRequestedDate">Requested Target Date *</label>
         <input type="date" id="popupRequestedDate" required />
       </div>
-      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+      <div class="modal-footer-actions">
         <button class="btn btn-secondary" type="button" onclick="closeDateRequestPopup()">Cancel</button>
         <button class="btn btn-warn" id="btnConfirmDateRequest" type="button" onclick="submitDateRequestPopup()">Send Approval Request</button>
       </div>
@@ -489,7 +558,7 @@
       event.stopPropagation();
       const menu = document.getElementById('msRespMenu');
       menu.classList.toggle('open');
-      if (menu.classList.contains('open')) {
+      if (menu.classList.contains('open') && window.innerWidth > 600) {
         document.getElementById('msRespSearch').focus();
       }
     }
@@ -594,7 +663,7 @@
     function updateUserHeader() {
       document.getElementById('currentUserEmail').textContent = currentUser.email || '-';
       document.getElementById('currentUserRole').textContent = currentUser.role || 'User';
-      document.getElementById('btnOpenAddUser').style.display = isAdminRole(currentUser.role) ? 'inline-block' : 'none';
+      document.getElementById('btnOpenAddUser').style.display = isAdminRole(currentUser.role) ? 'inline-flex' : 'none';
       if (currentUser.name && !document.getElementById('cObserver').value) {
         document.getElementById('cObserver').value = currentUser.name;
       }
@@ -904,6 +973,11 @@
         data: {
           labels: statuses,
           datasets: [{ data: statusCounts, backgroundColor: ['#0284c7', '#f59e0b', '#16a34a', '#dc2626'] }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } }
         }
       });
 
@@ -916,6 +990,12 @@
         data: {
           labels: respNames,
           datasets: [{ label: '3W Count', data: respCounts, backgroundColor: '#0f766e' }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
         }
       });
     }
@@ -1028,7 +1108,7 @@
       document.getElementById('eCorrFile').value = '';
 
       const reqBtn = document.getElementById('btnRequestApproval');
-      reqBtn.style.display = canRequest ? 'inline-block' : 'none';
+      reqBtn.style.display = canRequest ? 'inline-flex' : 'none';
 
       const reqInfo = reqTarget ? ` | Requested New Date: ${reqTarget}` : '';
       document.getElementById('eApprovalStatus').textContent =

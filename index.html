@@ -132,10 +132,12 @@
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
       justify-content: center; align-items: center; z-index: 999;
     }
+    #datePopupModal { z-index: 1200; }
     .modal {
       background: #fff; width: 92%; max-width: 680px; max-height: 90vh; overflow-y: auto;
       border-radius: 8px; padding: 16px;
     }
+    .popup-small { max-width: 420px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group label { font-size: 12px; font-weight: bold; }
@@ -400,7 +402,7 @@
           </select>
         </div>
         <div class="form-group" style="justify-content:flex-end;">
-          <button class="btn btn-warn" id="btnRequestApproval" type="button" onclick="requestDateApproval()">Request Approval (Date Change)</button>
+          <button class="btn btn-warn" id="btnRequestApproval" type="button" onclick="openDateRequestPopup()">Request Approval (Date Change)</button>
         </div>
 
         <div class="form-group full" id="adminDateApprovalActions" style="display:none;">
@@ -423,6 +425,22 @@
       <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
         <button class="btn btn-secondary" type="button" onclick="closeEditModal()">Close</button>
         <button class="btn btn-primary" id="btnSaveUpdate" type="button" onclick="saveUpdate3W()">Save Update</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup Modal for Entering Requested Target Date -->
+  <div class="modal-backdrop" id="datePopupModal">
+    <div class="modal popup-small">
+      <h3>Request Target Date Change</h3>
+      <p class="muted" id="popupCurrentTargetText">Current Target Date: -</p>
+      <div class="form-group">
+        <label for="popupRequestedDate">Requested Target Date *</label>
+        <input type="date" id="popupRequestedDate" required />
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-secondary" type="button" onclick="closeDateRequestPopup()">Cancel</button>
+        <button class="btn btn-warn" id="btnConfirmDateRequest" type="button" onclick="submitDateRequestPopup()">Send Approval Request</button>
       </div>
     </div>
   </div>
@@ -981,14 +999,12 @@
       document.getElementById('eIdTitle').textContent = rec.ID;
       document.getElementById('eObs').value = rec.Observation || '';
       document.getElementById('eAction').value = rec.Corrective_Action || '';
-      document.getElementById('eTarget').value = reqTarget || currentTarget;
+      document.getElementById('eTarget').value = currentTarget;
       document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
       document.getElementById('eStatus').value = rec.Status || 'New';
       document.getElementById('eCorrFile').value = '';
 
       const reqBtn = document.getElementById('btnRequestApproval');
-      const targetInput = document.getElementById('eTarget');
-      targetInput.disabled = false;
       reqBtn.style.display = canRequest ? 'inline-block' : 'none';
 
       const reqInfo = reqTarget ? ` | Requested New Date: ${reqTarget}` : '';
@@ -1010,7 +1026,63 @@
       document.getElementById('editModal').style.display = 'flex';
     }
 
-    function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+    function closeEditModal() {
+      closeDateRequestPopup();
+      document.getElementById('editModal').style.display = 'none';
+    }
+
+    function openDateRequestPopup() {
+      if (!editingRecord) return;
+      const currentTarget = String(editingRecord.Target_Date || '').slice(0, 10);
+      const existingReq = String(editingRecord.Requested_Target_Date || '').slice(0, 10);
+      document.getElementById('popupCurrentTargetText').textContent =
+        `Current Target Date: ${currentTarget || '-'}`;
+      document.getElementById('popupRequestedDate').value = existingReq || '';
+      document.getElementById('datePopupModal').style.display = 'flex';
+    }
+
+    function closeDateRequestPopup() {
+      document.getElementById('datePopupModal').style.display = 'none';
+    }
+
+    async function submitDateRequestPopup() {
+      if (!editingRecord) return;
+      const proposedDate = document.getElementById('popupRequestedDate').value;
+      const prevTarget = String(editingRecord.Target_Date || '').slice(0, 10);
+
+      if (!proposedDate) {
+        alert('Please select the Requested Target Date.');
+        return;
+      }
+      if (proposedDate === prevTarget) {
+        alert('Please select a different Requested Target Date than the current target date.');
+        return;
+      }
+
+      const btn = document.getElementById('btnConfirmDateRequest');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      try {
+        await postToApi({
+          action: 'update3W',
+          data: {
+            ID: editingRecord.ID,
+            Target_Date: proposedDate,
+            Approval_Requested: 'Requested'
+          }
+        });
+        alert(`Approval request sent for Requested Target Date: ${proposedDate}. Main target date will update once Admin approves.`);
+        closeEditModal();
+        await loadData();
+        setBanner(`Approval requested (${proposedDate}) for ID: ${editingRecord.ID}`, 'ok');
+      } catch (err) {
+        console.error(err);
+        alert('Approval request failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send Approval Request';
+      }
+    }
 
     async function saveUpdate3W() {
       if (!editingRecord) return;
@@ -1020,7 +1092,7 @@
       const newTarget = document.getElementById('eTarget').value;
 
       if (changeCount >= 1 && newTarget && newTarget !== prevTarget && !isAdminRole(currentUser.role)) {
-        alert('Target date has already been changed once. Please pick your new proposed date and click "Request Approval (Date Change)".');
+        alert('Target date has already been changed once. Please click "Request Approval (Date Change)" to choose your new requested date.');
         return;
       }
 
@@ -1061,43 +1133,6 @@
       }
     }
 
-    async function requestDateApproval() {
-      if (!editingRecord) return;
-      const proposedDate = document.getElementById('eTarget').value;
-      const prevTarget = String(editingRecord.Target_Date || '').slice(0, 10);
-
-      if (!proposedDate) {
-        alert('Please select the new Target Completion Date you want to change to.');
-        return;
-      }
-      if (proposedDate === prevTarget) {
-        alert('Please select a different Target Completion Date than the current target date.');
-        return;
-      }
-
-      const btn = document.getElementById('btnRequestApproval');
-      btn.disabled = true;
-      try {
-        await postToApi({
-          action: 'update3W',
-          data: {
-            ID: editingRecord.ID,
-            Target_Date: proposedDate,
-            Approval_Requested: 'Requested'
-          }
-        });
-        alert(`Approval request sent for new target date: ${proposedDate}. Main target date will update once Admin approves.`);
-        closeEditModal();
-        await loadData();
-        setBanner(`Approval requested (${proposedDate}) for ID: ${editingRecord.ID}`, 'ok');
-      } catch (err) {
-        console.error(err);
-        alert('Approval request failed: ' + err.message);
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
     async function decideDateApproval(decision) {
       if (!editingRecord || !isAdminRole(currentUser.role)) return;
       const btnApprove = document.getElementById('btnApproveDate');
@@ -1105,7 +1140,8 @@
       btnApprove.disabled = true;
       btnReject.disabled = true;
       try {
-        const appliedDate = document.getElementById('eTarget').value || String(editingRecord.Requested_Target_Date || '').slice(0, 10);
+        const reqTarget = String(editingRecord.Requested_Target_Date || '').slice(0, 10);
+        const appliedDate = reqTarget || document.getElementById('eTarget').value;
         const payloadData = {
           ID: editingRecord.ID,
           Approval_Requested: decision

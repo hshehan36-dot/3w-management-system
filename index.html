@@ -13,20 +13,30 @@
       --card: #ffffff;
       --border: #cbd5e1;
       --text: #0f172a;
+      --muted: #475569;
       --danger: #dc2626;
       --warning: #d97706;
+      --success: #16a34a;
     }
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); }
     header {
       background: var(--primary); color: #fff; padding: 10px 16px;
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
     }
     header h1 { margin: 0; font-size: 18px; }
-    .btn {
-      border: none; padding: 7px 12px; border-radius: 5px; cursor: pointer; font-weight: bold;
+    .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .status-banner {
+      background: #e2e8f0; color: #0f172a; padding: 6px 16px; font-size: 12px;
+      display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);
     }
-    .btn-primary { background: #16a34a; color: #fff; }
+    .status-err { background: #fee2e2; color: #991b1b; font-weight: bold; }
+    .status-ok { background: #dcfce7; color: #166534; }
+    .btn {
+      border: none; padding: 7px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 13px;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background: var(--success); color: #fff; }
     .btn-secondary { background: #e2e8f0; color: #0f172a; }
     .btn-warn { background: #f59e0b; color: #fff; }
     .filter-bar {
@@ -34,7 +44,7 @@
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
     }
     select, input {
-      padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+      padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff;
     }
     .main-grid {
       display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; padding: 12px 16px;
@@ -52,13 +62,14 @@
     .panel h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--primary-dark); }
     .right-panel {
       background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
-      display: flex; flex-direction: column; gap: 8px; max-height: 78vh; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px; max-height: 82vh; overflow-y: auto;
     }
     .id-card {
       border: 1px solid var(--border); border-left: 4px solid var(--primary);
       border-radius: 5px; padding: 8px; cursor: pointer; background: #f8fafc;
     }
     .id-card:hover { background: #f1f5f9; }
+    .id-card-overdue { border-left-color: var(--danger); }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { border: 1px solid var(--border); padding: 6px; text-align: left; }
     th { background: #e2e8f0; }
@@ -67,7 +78,7 @@
       justify-content: center; align-items: center; z-index: 999;
     }
     .modal {
-      background: #fff; width: 92%; max-width: 640px; max-height: 90vh; overflow-y: auto;
+      background: #fff; width: 92%; max-width: 660px; max-height: 90vh; overflow-y: auto;
       border-radius: 8px; padding: 16px;
     }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -75,6 +86,7 @@
     .form-group label { font-size: 12px; font-weight: bold; }
     .full { grid-column: 1 / -1; }
     .badge-overdue { color: var(--danger); font-weight: bold; }
+    .muted { color: var(--muted); font-size: 12px; }
     @media (max-width: 900px) {
       .main-grid, .charts-row, .form-grid { grid-template-columns: 1fr; }
     }
@@ -83,11 +95,16 @@
 <body>
   <header>
     <h1>3W Management System</h1>
-    <div>
-      <button class="btn btn-primary" onclick="openCreateModal()">+ Add New 3W</button>
-      <button class="btn btn-secondary" onclick="loadData()">Refresh</button>
+    <div class="header-actions">
+      <button class="btn btn-primary" id="btnOpenCreate" onclick="openCreateModal()">+ Add New 3W</button>
+      <button class="btn btn-secondary" id="btnRefresh" onclick="loadData()">Refresh</button>
     </div>
   </header>
+
+  <div class="status-banner" id="statusBanner">
+    <span id="statusText">Ready</span>
+    <span id="recordCountLabel" class="muted">Records: 0</span>
+  </div>
 
   <div class="filter-bar">
     <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
@@ -139,7 +156,7 @@
             <thead>
               <tr>
                 <th>ID</th><th>Plant</th><th>Date</th><th>Observation</th>
-                <th>Observer</th><th>Area</th><th>Requirement</th><th>Responsible</th>
+                <th>Observer</th><th>Area</th><th>Evidence</th><th>Responsible</th>
                 <th>Target</th><th>Status</th><th>Action</th>
               </tr>
             </thead>
@@ -160,14 +177,15 @@
   <div class="modal-backdrop" id="createModal">
     <div class="modal">
       <h3>Add New 3W</h3>
+      <p class="muted" style="margin-top:-4px;">Please verify the location code / plant before submitting.</p>
       <div class="form-grid">
         <div class="form-group">
           <label>Report Date *</label>
-          <input type="date" id="cDate" />
+          <input type="date" id="cDate" required />
         </div>
         <div class="form-group">
           <label>Plant *</label>
-          <input type="text" id="cPlant" placeholder="e.g. BCEN" />
+          <input type="text" id="cPlant" placeholder="e.g. BCEN" required />
         </div>
         <div class="form-group">
           <label>Compliance Requirement / Standard</label>
@@ -175,23 +193,23 @@
         </div>
         <div class="form-group">
           <label>Observed Location / Area</label>
-          <input type="text" id="cArea" />
+          <input type="text" id="cArea" placeholder="e.g. Sewing Line 1" />
         </div>
         <div class="form-group full">
           <label>Observation Description *</label>
-          <input type="text" id="cObs" />
+          <input type="text" id="cObs" placeholder="Describe the observation..." required />
         </div>
         <div class="form-group">
           <label>Reported By (Observer) *</label>
-          <input type="text" id="cObserver" />
+          <input type="text" id="cObserver" required />
         </div>
         <div class="form-group">
           <label>Responsible Person *</label>
-          <input type="text" id="cResp" />
+          <input type="text" id="cResp" required />
         </div>
         <div class="form-group">
           <label>Responsible Email</label>
-          <input type="email" id="cRespEmail" />
+          <input type="email" id="cRespEmail" placeholder="name@company.com" />
         </div>
         <div class="form-group">
           <label>Target Completion Date</label>
@@ -203,8 +221,8 @@
         </div>
       </div>
       <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitCreate3W()">Submit</button>
+        <button class="btn btn-secondary" type="button" onclick="closeCreateModal()">Cancel</button>
+        <button class="btn btn-primary" id="btnSubmitCreate" type="button" onclick="submitCreate3W()">Submit</button>
       </div>
     </div>
   </div>
@@ -239,12 +257,15 @@
           </select>
         </div>
         <div class="form-group" style="justify-content:flex-end;">
-          <button class="btn btn-warn" onclick="requestDateApproval()">Request Approval (Date Change)</button>
+          <button class="btn btn-warn" id="btnRequestApproval" type="button" onclick="requestDateApproval()">Request Approval (Date Change)</button>
+        </div>
+        <div class="form-group full">
+          <span class="muted" id="eApprovalStatus">Approval Status: -</span>
         </div>
       </div>
       <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closeEditModal()">Close</button>
-        <button class="btn btn-primary" onclick="saveUpdate3W()">Save Update</button>
+        <button class="btn btn-secondary" type="button" onclick="closeEditModal()">Close</button>
+        <button class="btn btn-primary" id="btnSaveUpdate" type="button" onclick="saveUpdate3W()">Save Update</button>
       </div>
     </div>
   </div>
@@ -258,27 +279,74 @@
 
     document.getElementById('cDate').valueAsDate = new Date();
 
+    function setBanner(msg, type = 'normal') {
+      const banner = document.getElementById('statusBanner');
+      const text = document.getElementById('statusText');
+      banner.classList.remove('status-err', 'status-ok');
+      if (type === 'err') banner.classList.add('status-err');
+      if (type === 'ok') banner.classList.add('status-ok');
+      text.textContent = msg;
+    }
+
     function computeEffectiveStatus(r) {
       if (r.Status === 'Completed') return 'Completed';
       if (r.Target_Date) {
         const target = new Date(r.Target_Date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        if (target < today) return 'Overdue';
+        if (!isNaN(target.getTime()) && target < today) return 'Overdue';
       }
       return r.Status || 'New';
     }
 
+    async function postToApi(payloadObj) {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payloadObj)
+      });
+      const rawText = await res.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(rawText);
+      } catch (e) {
+        throw new Error('Invalid response from server. Check Apps Script deployment access ("Anyone") and authorization.');
+      }
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Server returned an error');
+      }
+      return parsed;
+    }
+
     async function loadData() {
-      const res = await fetch(`${API_URL}?action=getAll`);
-      const json = await res.json();
-      if (json.ok) {
-        allRecords = json.records.map(r => ({
+      const btn = document.getElementById('btnRefresh');
+      btn.disabled = true;
+      setBanner('Loading data from Google Sheet...');
+      try {
+        const res = await fetch(`${API_URL}?action=getAll`);
+        const rawText = await res.text();
+        let json;
+        try {
+          json = JSON.parse(rawText);
+        } catch (e) {
+          throw new Error('Could not parse sheet data. Verify Apps Script Web App access is set to "Anyone".');
+        }
+        if (!json.ok) {
+          throw new Error(json.error || 'Failed to load data');
+        }
+        allRecords = (json.records || []).map(r => ({
           ...r,
           Effective_Status: computeEffectiveStatus(r)
         }));
+        document.getElementById('recordCountLabel').textContent = `Records: ${allRecords.length}`;
         populateFilters();
         renderAll();
+        setBanner('Connected & up to date', 'ok');
+      } catch (err) {
+        console.error(err);
+        setBanner('Error: ' + err.message, 'err');
+      } finally {
+        btn.disabled = false;
       }
     }
 
@@ -293,8 +361,16 @@
       const sel = document.getElementById(id);
       const current = sel.value;
       sel.innerHTML = `<option value="">${defaultLabel}</option>` +
-        items.map(v => `<option value="${v}">${v}</option>`).join('');
+        items.map(v => `<option value="${escapeHtml(String(v))}">${escapeHtml(String(v))}</option>`).join('');
       if (items.includes(current)) sel.value = current;
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
     function clearFilters() {
@@ -328,28 +404,32 @@
       document.getElementById('kpiPending').textContent = rows.filter(r => r.Effective_Status === 'Pending').length;
       document.getElementById('kpiOverdue').textContent = rows.filter(r => r.Effective_Status === 'Overdue').length;
 
-      document.getElementById('idCardsList').innerHTML = rows.map(r => `
-        <div class="id-card" onclick="openEditModal('${r.ID}')">
-          <strong>ID: ${r.ID}</strong> | ${r.Effective_Status}<br/>
-          <small>Observer: ${r.Observer || '-'} | Responsible: ${r.Responsible_Person || '-'}</small>
-        </div>
-      `).join('');
+      document.getElementById('idCardsList').innerHTML = rows.length
+        ? rows.map(r => `
+            <div class="id-card ${r.Effective_Status === 'Overdue' ? 'id-card-overdue' : ''}" onclick="openEditModal('${escapeHtml(String(r.ID))}')">
+              <strong>ID: ${escapeHtml(String(r.ID))}</strong> | <span class="${r.Effective_Status === 'Overdue' ? 'badge-overdue' : ''}">${escapeHtml(String(r.Effective_Status))}</span><br/>
+              <small>Observer: ${escapeHtml(String(r.Observer || '-'))} | Responsible: ${escapeHtml(String(r.Responsible_Person || '-'))}</small>
+            </div>
+          `).join('')
+        : '<p class="muted">No matching 3W records.</p>';
 
-      document.getElementById('tableBody').innerHTML = rows.map(r => `
-        <tr>
-          <td>${r.ID}</td>
-          <td>${r.Plant || ''}</td>
-          <td>${String(r.Report_Date || '').slice(0, 10)}</td>
-          <td>${r.Observation || ''}</td>
-          <td>${r.Observer || ''}</td>
-          <td>${r.Area || ''}</td>
-          <td>${r.Requirement || ''}</td>
-          <td>${r.Responsible_Person || ''}</td>
-          <td>${String(r.Target_Date || '').slice(0, 10)}</td>
-          <td class="${r.Effective_Status === 'Overdue' ? 'badge-overdue' : ''}">${r.Effective_Status}</td>
-          <td><button class="btn btn-secondary" onclick="openEditModal('${r.ID}')">Edit</button></td>
-        </tr>
-      `).join('');
+      document.getElementById('tableBody').innerHTML = rows.length
+        ? rows.map(r => `
+            <tr>
+              <td>${escapeHtml(String(r.ID))}</td>
+              <td>${escapeHtml(String(r.Plant || ''))}</td>
+              <td>${escapeHtml(String(r.Report_Date || '').slice(0, 10))}</td>
+              <td>${escapeHtml(String(r.Observation || ''))}</td>
+              <td>${escapeHtml(String(r.Observer || ''))}</td>
+              <td>${escapeHtml(String(r.Area || ''))}</td>
+              <td>${r.Evidence_URL ? `<a href="${escapeHtml(String(r.Evidence_URL))}" target="_blank">View</a>` : '-'}</td>
+              <td>${escapeHtml(String(r.Responsible_Person || ''))}</td>
+              <td>${escapeHtml(String(r.Target_Date || '').slice(0, 10))}</td>
+              <td class="${r.Effective_Status === 'Overdue' ? 'badge-overdue' : ''}">${escapeHtml(String(r.Effective_Status))}</td>
+              <td><button class="btn btn-secondary" onclick="openEditModal('${escapeHtml(String(r.ID))}')">Edit</button></td>
+            </tr>
+          `).join('')
+        : '<tr><td colspan="11" class="muted">No records found. Click "+ Add New 3W" to create one.</td></tr>';
 
       renderCharts(rows);
     }
@@ -393,36 +473,61 @@
     }
 
     async function submitCreate3W() {
-      const fileInput = document.getElementById('cFile');
-      let fileBase64 = '', fileName = '', mimeType = '';
-      if (fileInput.files.length > 0) {
-        const f = fileInput.files[0];
-        fileBase64 = await fileToBase64(f);
-        fileName = f.name;
-        mimeType = f.type || 'application/octet-stream';
+      const plant = document.getElementById('cPlant').value.trim();
+      const obs = document.getElementById('cObs').value.trim();
+      const observer = document.getElementById('cObserver').value.trim();
+      const resp = document.getElementById('cResp').value.trim();
+
+      if (!plant || !obs || !observer || !resp) {
+        alert('Please fill all required (*) fields: Plant, Observation, Observer, Responsible Person.');
+        return;
       }
 
-      const data = {
-        Report_Date: document.getElementById('cDate').value,
-        Plant: document.getElementById('cPlant').value,
-        Requirement: document.getElementById('cReq').value,
-        Area: document.getElementById('cArea').value,
-        Observation: document.getElementById('cObs').value,
-        Observer: document.getElementById('cObserver').value,
-        Responsible_Person: document.getElementById('cResp').value,
-        Responsible_Email: document.getElementById('cRespEmail').value,
-        Target_Date: document.getElementById('cTarget').value,
-        Status: 'New',
-        fileBase64, fileName, mimeType
-      };
+      const btn = document.getElementById('btnSubmitCreate');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      setBanner('Submitting 3W record...');
 
-      await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'create3W', data })
-      });
+      try {
+        const fileInput = document.getElementById('cFile');
+        let fileBase64 = '', fileName = '', mimeType = '';
+        if (fileInput.files.length > 0) {
+          const f = fileInput.files[0];
+          fileBase64 = await fileToBase64(f);
+          fileName = f.name;
+          mimeType = f.type || 'application/octet-stream';
+        }
 
-      closeCreateModal();
-      await loadData();
+        const data = {
+          Report_Date: document.getElementById('cDate').value,
+          Plant: plant,
+          Requirement: document.getElementById('cReq').value.trim(),
+          Area: document.getElementById('cArea').value.trim(),
+          Observation: obs,
+          Observer: observer,
+          Responsible_Person: resp,
+          Responsible_Email: document.getElementById('cRespEmail').value.trim(),
+          Target_Date: document.getElementById('cTarget').value,
+          Status: 'New',
+          fileBase64, fileName, mimeType
+        };
+
+        const result = await postToApi({ action: 'create3W', data });
+        document.getElementById('cObs').value = '';
+        document.getElementById('cArea').value = '';
+        document.getElementById('cTarget').value = '';
+        document.getElementById('cFile').value = '';
+        closeCreateModal();
+        await loadData();
+        setBanner(`3W Created! New ID: ${result.record && result.record.ID ? result.record.ID : ''}`, 'ok');
+      } catch (err) {
+        console.error(err);
+        setBanner('Submit failed: ' + err.message, 'err');
+        alert('Submit failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit';
+      }
     }
 
     function openEditModal(id) {
@@ -435,6 +540,7 @@
       document.getElementById('eTarget').value = String(rec.Target_Date || '').slice(0, 10);
       document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
       document.getElementById('eStatus').value = rec.Status || 'New';
+      document.getElementById('eApprovalStatus').textContent = `Approval Status: ${rec.Approval_Requested || 'No'}`;
       document.getElementById('editModal').style.display = 'flex';
     }
 
@@ -442,9 +548,11 @@
 
     async function saveUpdate3W() {
       if (!editingRecord) return;
-      await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
+      const btn = document.getElementById('btnSaveUpdate');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await postToApi({
           action: 'update3W',
           data: {
             ID: editingRecord.ID,
@@ -453,28 +561,42 @@
             Actual_Date: document.getElementById('eActual').value,
             Status: document.getElementById('eStatus').value
           }
-        })
-      });
-      closeEditModal();
-      await loadData();
+        });
+        closeEditModal();
+        await loadData();
+        setBanner(`Updated ID: ${editingRecord.ID}`, 'ok');
+      } catch (err) {
+        console.error(err);
+        alert('Update failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Update';
+      }
     }
 
     async function requestDateApproval() {
       if (!editingRecord) return;
-      await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
+      const btn = document.getElementById('btnRequestApproval');
+      btn.disabled = true;
+      try {
+        await postToApi({
           action: 'update3W',
           data: {
             ID: editingRecord.ID,
             Target_Date: document.getElementById('eTarget').value,
             Approval_Requested: 'Requested'
           }
-        })
-      });
-      alert('Approval request recorded!');
-      closeEditModal();
-      await loadData();
+        });
+        alert('Approval request recorded!');
+        closeEditModal();
+        await loadData();
+        setBanner(`Approval requested for ID: ${editingRecord.ID}`, 'ok');
+      } catch (err) {
+        console.error(err);
+        alert('Approval request failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     loadData();

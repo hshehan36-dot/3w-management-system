@@ -72,15 +72,35 @@
     select, input {
       padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff;
     }
-    .multi-select-box {
-      border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px;
-      max-height: 115px; overflow-y: auto; background: #f8fafc;
-      display: flex; flex-direction: column; gap: 4px;
+
+    /* Multi-select Dropdown Styles */
+    .ms-wrapper { position: relative; }
+    .ms-trigger {
+      width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid var(--border);
+      border-radius: 4px; background: #fff; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center; gap: 6px; font-size: 13px; text-align: left;
     }
+    .ms-tags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+    .ms-tag {
+      background: #ccfbf1; color: #115e59; border: 1px solid #5eead4;
+      padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: bold;
+    }
+    .ms-placeholder { color: var(--muted); font-size: 12px; }
+    .ms-menu {
+      display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+      background: #fff; border: 1px solid var(--border); border-radius: 6px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 1500; padding: 6px;
+    }
+    .ms-menu.open { display: block; }
+    .ms-search { width: 100%; margin-bottom: 6px; font-size: 12px; padding: 5px 7px; }
+    .ms-options { max-height: 145px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
     .multi-item {
-      display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: normal; cursor: pointer;
+      display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: normal;
+      cursor: pointer; padding: 4px 6px; border-radius: 4px;
     }
+    .multi-item:hover { background: #f1f5f9; }
     .multi-item input { margin: 0; cursor: pointer; }
+
     .main-grid {
       display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; padding: 12px 16px;
     }
@@ -300,14 +320,25 @@
         </div>
         <div class="form-group">
           <label>Responsible Persons (Multiple allowed) *</label>
-          <div class="multi-select-box" id="cRespMultiBox">
-            <span class="muted">Loading users...</span>
+          <div class="ms-wrapper" id="respDropdownWrapper">
+            <button type="button" class="ms-trigger" id="msRespTrigger" onclick="toggleRespDropdown(event)">
+              <div class="ms-tags" id="msRespTags">
+                <span class="ms-placeholder">Select Responsible Persons...</span>
+              </div>
+              <span>&#9662;</span>
+            </button>
+            <div class="ms-menu" id="msRespMenu" onclick="event.stopPropagation()">
+              <input type="text" class="ms-search" id="msRespSearch" placeholder="Search name or email..." oninput="filterRespOptions()" />
+              <div class="ms-options" id="cRespMultiBox">
+                <span class="muted">Loading users...</span>
+              </div>
+            </div>
           </div>
-          <input type="text" id="cResp" placeholder="Selected or comma-separated names (e.g. Shehan, Hasitha)" required />
+          <input type="text" id="cResp" placeholder="Selected or comma-separated names" required />
         </div>
         <div class="form-group">
           <label>Responsible Emails (comma-separated)</label>
-          <input type="text" id="cRespEmail" placeholder="Auto-filled or enter emails separated by comma" />
+          <input type="text" id="cRespEmail" placeholder="Auto-filled from selected users" />
         </div>
         <div class="form-group">
           <label>Target Completion Date</label>
@@ -401,6 +432,32 @@
 
     document.getElementById('cDate').valueAsDate = new Date();
 
+    document.addEventListener('click', function () {
+      const menu = document.getElementById('msRespMenu');
+      if (menu) menu.classList.remove('open');
+    });
+
+    function toggleRespDropdown(event) {
+      event.stopPropagation();
+      const menu = document.getElementById('msRespMenu');
+      menu.classList.toggle('open');
+      if (menu.classList.contains('open')) {
+        document.getElementById('msRespSearch').focus();
+      }
+    }
+
+    function filterRespOptions() {
+      const q = String(document.getElementById('msRespSearch').value || '').trim().toLowerCase();
+      document.querySelectorAll('#cRespMultiBox .multi-item').forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = !q || text.includes(q) ? 'flex' : 'none';
+      });
+    }
+
+    function isValidEmail(val) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(val || '').trim());
+    }
+
     function normalizeEmail(val) {
       return String(val || '').trim().toLowerCase();
     }
@@ -460,7 +517,7 @@
 
     function handleLogin() {
       const rawEmail = normalizeEmail(document.getElementById('loginEmailInput').value);
-      if (!rawEmail || !rawEmail.includes('@')) {
+      if (!isValidEmail(rawEmail)) {
         alert('Please enter a valid email address.');
         return;
       }
@@ -509,7 +566,7 @@
       const role = document.getElementById('uRole').value.trim() || 'User';
       const plant = document.getElementById('uPlant').value.trim();
 
-      if (!name || !email || !email.includes('@')) {
+      if (!name || !isValidEmail(email)) {
         alert('Please enter a valid Name and Email.');
         return;
       }
@@ -550,22 +607,25 @@
       obsSel.innerHTML = '<option value="">-- Select from Users --</option>' +
         validUsers.map(u => {
           const name = String(u.Name || u.Email).trim();
-          const email = String(u.Email || '').trim();
-          return `<option value="${escapeHtml(name)}">${escapeHtml(name)}${email ? ' (' + escapeHtml(email) + ')' : ''}</option>`;
+          const email = normalizeEmail(u.Email);
+          return `<option value="${escapeHtml(name)}">${escapeHtml(name)}${isValidEmail(email) ? ' (' + escapeHtml(email) + ')' : ''}</option>`;
         }).join('');
 
       respBox.innerHTML = validUsers.length
         ? validUsers.map((u, idx) => {
             const name = String(u.Name || u.Email).trim();
-            const email = String(u.Email || '').trim();
+            const email = normalizeEmail(u.Email);
+            const cleanEmail = isValidEmail(email) ? email : '';
             return `
               <label class="multi-item">
-                <input type="checkbox" class="resp-checkbox" data-name="${escapeHtml(name)}" data-email="${escapeHtml(email)}" onchange="onResponsibleMultiChange()" id="respChk_${idx}" />
-                <span>${escapeHtml(name)}${email ? ' <span class="muted">(' + escapeHtml(email) + ')</span>' : ''}</span>
+                <input type="checkbox" class="resp-checkbox" data-name="${escapeHtml(name)}" data-email="${escapeHtml(cleanEmail)}" onchange="onResponsibleMultiChange()" id="respChk_${idx}" />
+                <span>${escapeHtml(name)}${cleanEmail ? ' <span class="muted">(' + escapeHtml(cleanEmail) + ')</span>' : ''}</span>
               </label>
             `;
           }).join('')
         : '<span class="muted">No users found in Users sheet.</span>';
+
+      renderRespTags([]);
 
       const matchedLoggedUser = validUsers.find(u => normalizeEmail(u.Email) === normalizeEmail(currentUser.email));
       if (matchedLoggedUser && matchedLoggedUser.Name) {
@@ -580,6 +640,15 @@
       plantList.innerHTML = plants.map(p => `<option value="${escapeHtml(p)}"></option>`).join('');
     }
 
+    function renderRespTags(names) {
+      const tagsEl = document.getElementById('msRespTags');
+      if (!names || !names.length) {
+        tagsEl.innerHTML = '<span class="ms-placeholder">Select Responsible Persons...</span>';
+        return;
+      }
+      tagsEl.innerHTML = names.map(n => `<span class="ms-tag">${escapeHtml(n)}</span>`).join('');
+    }
+
     function onObserverSelectChange() {
       const sel = document.getElementById('cObserverSelect');
       if (sel.value) {
@@ -590,9 +659,14 @@
     function onResponsibleMultiChange() {
       const checked = [...document.querySelectorAll('.resp-checkbox:checked')];
       const names = checked.map(el => el.dataset.name).filter(Boolean);
-      const emails = checked.map(el => el.dataset.email).filter(Boolean);
+      const emails = checked
+        .map(el => normalizeEmail(el.dataset.email))
+        .filter(isValidEmail);
+      const uniqueEmails = [...new Set(emails)];
+
       document.getElementById('cResp').value = names.join(', ');
-      document.getElementById('cRespEmail').value = [...new Set(emails)].join(', ');
+      document.getElementById('cRespEmail').value = uniqueEmails.join(', ');
+      renderRespTags(names);
     }
 
     function setBanner(msg, type = 'normal') {
@@ -795,7 +869,10 @@
       populateUserDropdowns();
       document.getElementById('createModal').style.display = 'flex';
     }
-    function closeCreateModal() { document.getElementById('createModal').style.display = 'none'; }
+    function closeCreateModal() {
+      document.getElementById('msRespMenu').classList.remove('open');
+      document.getElementById('createModal').style.display = 'none';
+    }
 
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
@@ -816,6 +893,11 @@
         alert('Please fill all required (*) fields: Plant, Observation, Observer, Responsible Person.');
         return;
       }
+
+      const rawRespEmails = document.getElementById('cRespEmail').value
+        .split(',')
+        .map(e => normalizeEmail(e))
+        .filter(isValidEmail);
 
       const btn = document.getElementById('btnSubmitCreate');
       btn.disabled = true;
@@ -839,9 +921,9 @@
           Area: document.getElementById('cArea').value.trim(),
           Observation: obs,
           Observer: observer,
-          Observer_Email: currentUser.email,
+          Observer_Email: isValidEmail(currentUser.email) ? normalizeEmail(currentUser.email) : '',
           Responsible_Person: resp,
-          Responsible_Email: document.getElementById('cRespEmail').value.trim(),
+          Responsible_Email: [...new Set(rawRespEmails)].join(', '),
           Target_Date: document.getElementById('cTarget').value,
           Status: 'New',
           fileBase64, fileName, mimeType
@@ -852,9 +934,11 @@
         document.getElementById('cArea').value = '';
         document.getElementById('cResp').value = '';
         document.getElementById('cRespEmail').value = '';
+        document.getElementById('msRespSearch').value = '';
         document.getElementById('cTarget').value = '';
         document.getElementById('cFile').value = '';
         document.querySelectorAll('.resp-checkbox').forEach(cb => cb.checked = false);
+        renderRespTags([]);
         closeCreateModal();
         await loadData();
         setBanner('3W record submitted!', 'ok');

@@ -228,7 +228,8 @@
         </div>
         <div class="form-group">
           <label>Plant *</label>
-          <input type="text" id="cPlant" placeholder="e.g. BCEN" required />
+          <input type="text" id="cPlant" list="plantDatalist" placeholder="e.g. BCEN" required />
+          <datalist id="plantDatalist"></datalist>
         </div>
         <div class="form-group">
           <label>Compliance Requirement / Standard</label>
@@ -244,15 +245,21 @@
         </div>
         <div class="form-group">
           <label>Reported By (Observer) *</label>
-          <input type="text" id="cObserver" required />
+          <select id="cObserverSelect" onchange="onObserverSelectChange()">
+            <option value="">-- Select from Users --</option>
+          </select>
+          <input type="text" id="cObserver" placeholder="Or type Observer name" required />
         </div>
         <div class="form-group">
           <label>Responsible Person *</label>
-          <input type="text" id="cResp" required />
+          <select id="cRespSelect" onchange="onResponsibleSelectChange()">
+            <option value="">-- Select from Users --</option>
+          </select>
+          <input type="text" id="cResp" placeholder="Or type Responsible name" required />
         </div>
         <div class="form-group">
           <label>Responsible Email</label>
-          <input type="email" id="cRespEmail" placeholder="name@company.com" />
+          <input type="email" id="cRespEmail" placeholder="Auto-filled or enter email" />
         </div>
         <div class="form-group">
           <label>Target Completion Date</label>
@@ -353,12 +360,12 @@
     function resolveUserRole(email, usersList) {
       const target = normalizeEmail(email);
       const found = (usersList || []).find(u => normalizeEmail(u.Email) === target);
-      if (found && found.Role) {
-        const cleanRole = String(found.Role).trim();
+      if (found) {
+        const cleanRole = String(found.Role || '').trim() || 'User';
         return {
           email: target,
-          name: found.Name || target,
-          role: cleanRole || 'User'
+          name: String(found.Name || '').trim() || target,
+          role: cleanRole
         };
       }
       return {
@@ -398,6 +405,53 @@
       document.getElementById('currentUserRole').textContent = currentUser.role || 'User';
       if (currentUser.name && !document.getElementById('cObserver').value) {
         document.getElementById('cObserver').value = currentUser.name;
+      }
+    }
+
+    function populateUserDropdowns() {
+      const obsSel = document.getElementById('cObserverSelect');
+      const respSel = document.getElementById('cRespSelect');
+      const plantList = document.getElementById('plantDatalist');
+
+      const validUsers = (allUsers || []).filter(u => u.Name || u.Email);
+      const optionsHtml = '<option value="">-- Select from Users --</option>' +
+        validUsers.map(u => {
+          const name = String(u.Name || u.Email).trim();
+          const email = String(u.Email || '').trim();
+          return `<option value="${escapeHtml(name)}" data-email="${escapeHtml(email)}">${escapeHtml(name)}${email ? ' (' + escapeHtml(email) + ')' : ''}</option>`;
+        }).join('');
+
+      obsSel.innerHTML = optionsHtml;
+      respSel.innerHTML = optionsHtml;
+
+      const matchedLoggedUser = validUsers.find(u => normalizeEmail(u.Email) === normalizeEmail(currentUser.email));
+      if (matchedLoggedUser && matchedLoggedUser.Name) {
+        obsSel.value = String(matchedLoggedUser.Name).trim();
+        document.getElementById('cObserver').value = String(matchedLoggedUser.Name).trim();
+      }
+
+      const plants = [...new Set([
+        ...(allUsers || []).map(u => String(u.Plant || '').trim()).filter(Boolean),
+        ...(allRecords || []).map(r => String(r.Plant || '').trim()).filter(Boolean)
+      ])];
+      plantList.innerHTML = plants.map(p => `<option value="${escapeHtml(p)}"></option>`).join('');
+    }
+
+    function onObserverSelectChange() {
+      const sel = document.getElementById('cObserverSelect');
+      if (sel.value) {
+        document.getElementById('cObserver').value = sel.value;
+      }
+    }
+
+    function onResponsibleSelectChange() {
+      const sel = document.getElementById('cRespSelect');
+      const selectedOpt = sel.options[sel.selectedIndex];
+      if (sel.value) {
+        document.getElementById('cResp').value = sel.value;
+      }
+      if (selectedOpt && selectedOpt.dataset && selectedOpt.dataset.email) {
+        document.getElementById('cRespEmail').value = selectedOpt.dataset.email;
       }
     }
 
@@ -483,6 +537,7 @@
 
         allRecords = getRoleScopedRecords(withStatus);
         document.getElementById('recordCountLabel').textContent = `Visible Records: ${allRecords.length} (${currentUser.role})`;
+        populateUserDropdowns();
         populateFilters();
         renderAll();
         setBanner(`Connected (${currentUser.role} access)`, 'ok');
@@ -605,7 +660,10 @@
       });
     }
 
-    function openCreateModal() { document.getElementById('createModal').style.display = 'flex'; }
+    function openCreateModal() {
+      populateUserDropdowns();
+      document.getElementById('createModal').style.display = 'flex';
+    }
     function closeCreateModal() { document.getElementById('createModal').style.display = 'none'; }
 
     function fileToBase64(file) {

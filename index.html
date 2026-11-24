@@ -78,7 +78,7 @@
       justify-content: center; align-items: center; z-index: 999;
     }
     .modal {
-      background: #fff; width: 92%; max-width: 660px; max-height: 90vh; overflow-y: auto;
+      background: #fff; width: 92%; max-width: 680px; max-height: 90vh; overflow-y: auto;
       border-radius: 8px; padding: 16px;
     }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -87,6 +87,10 @@
     .full { grid-column: 1 / -1; }
     .badge-overdue { color: var(--danger); font-weight: bold; }
     .muted { color: var(--muted); font-size: 12px; }
+    .evidence-box {
+      background: #f8fafc; border: 1px dashed var(--border); border-radius: 6px; padding: 8px 10px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
     @media (max-width: 900px) {
       .main-grid, .charts-row, .form-grid { grid-template-columns: 1fr; }
     }
@@ -156,8 +160,8 @@
             <thead>
               <tr>
                 <th>ID</th><th>Plant</th><th>Date</th><th>Observation</th>
-                <th>Observer</th><th>Area</th><th>Evidence</th><th>Responsible</th>
-                <th>Target</th><th>Status</th><th>Action</th>
+                <th>Observer</th><th>Area</th><th>Obs. Evid.</th><th>Corr. Evid.</th>
+                <th>Responsible</th><th>Target</th><th>Status</th><th>Action</th>
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -216,7 +220,7 @@
           <input type="date" id="cTarget" />
         </div>
         <div class="form-group full">
-          <label>Evidence Attachment (Photo/File)</label>
+          <label>Observation Evidence Attachment (Photo/File)</label>
           <input type="file" id="cFile" />
         </div>
       </div>
@@ -236,6 +240,20 @@
           <label>Observation</label>
           <input type="text" id="eObs" disabled />
         </div>
+
+        <div class="form-group full">
+          <div class="evidence-box">
+            <div>
+              <strong>Observation Evidence:</strong>
+              <span id="eObsEvidenceLink" class="muted">No file attached</span>
+            </div>
+            <div>
+              <strong>Correction Evidence:</strong>
+              <span id="eCorrEvidenceLink" class="muted">No file attached</span>
+            </div>
+          </div>
+        </div>
+
         <div class="form-group full">
           <label>Corrective Action</label>
           <input type="text" id="eAction" />
@@ -259,6 +277,12 @@
         <div class="form-group" style="justify-content:flex-end;">
           <button class="btn btn-warn" id="btnRequestApproval" type="button" onclick="requestDateApproval()">Request Approval (Date Change)</button>
         </div>
+
+        <div class="form-group full">
+          <label>Correction Evidence Photo / File (Attach when updating / completing)</label>
+          <input type="file" id="eCorrFile" />
+        </div>
+
         <div class="form-group full">
           <span class="muted" id="eApprovalStatus">Approval Status: -</span>
         </div>
@@ -416,14 +440,15 @@
               <td>${escapeHtml(String(r.Observation || ''))}</td>
               <td>${escapeHtml(String(r.Observer || ''))}</td>
               <td>${escapeHtml(String(r.Area || ''))}</td>
-              <td>${r.Evidence_URL ? `<a href="${escapeHtml(String(r.Evidence_URL))}" target="_blank">View</a>` : '-'}</td>
+              <td>${r.Evidence_URL ? `<a href="${escapeHtml(String(r.Evidence_URL))}" target="_blank" rel="noopener">View</a>` : '-'}</td>
+              <td>${r.Correction_Evidence_URL ? `<a href="${escapeHtml(String(r.Correction_Evidence_URL))}" target="_blank" rel="noopener">View</a>` : '-'}</td>
               <td>${escapeHtml(String(r.Responsible_Person || ''))}</td>
               <td>${escapeHtml(String(r.Target_Date || '').slice(0, 10))}</td>
               <td class="${r.Effective_Status === 'Overdue' ? 'badge-overdue' : ''}">${escapeHtml(String(r.Effective_Status))}</td>
               <td><button class="btn btn-secondary" onclick="openEditModal('${escapeHtml(String(r.ID))}')">Edit</button></td>
             </tr>
           `).join('')
-        : '<tr><td colspan="11" class="muted">No records found. Click "+ Add New 3W" to create one.</td></tr>';
+        : '<tr><td colspan="12" class="muted">No records found. Click "+ Add New 3W" to create one.</td></tr>';
 
       renderCharts(rows);
     }
@@ -534,7 +559,17 @@
       document.getElementById('eTarget').value = String(rec.Target_Date || '').slice(0, 10);
       document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
       document.getElementById('eStatus').value = rec.Status || 'New';
+      document.getElementById('eCorrFile').value = '';
       document.getElementById('eApprovalStatus').textContent = `Approval Status: ${rec.Approval_Requested || 'No'}`;
+
+      document.getElementById('eObsEvidenceLink').innerHTML = rec.Evidence_URL
+        ? `<a href="${escapeHtml(String(rec.Evidence_URL))}" target="_blank" rel="noopener">Open in Drive</a>`
+        : '<span class="muted">No file attached</span>';
+
+      document.getElementById('eCorrEvidenceLink').innerHTML = rec.Correction_Evidence_URL
+        ? `<a href="${escapeHtml(String(rec.Correction_Evidence_URL))}" target="_blank" rel="noopener">Open in Drive</a>`
+        : '<span class="muted">No file attached</span>';
+
       document.getElementById('editModal').style.display = 'flex';
     }
 
@@ -546,6 +581,15 @@
       btn.disabled = true;
       btn.textContent = 'Saving...';
       try {
+        const corrFileInput = document.getElementById('eCorrFile');
+        let corrFileBase64 = '', corrFileName = '', corrMimeType = '';
+        if (corrFileInput.files.length > 0) {
+          const f = corrFileInput.files[0];
+          corrFileBase64 = await fileToBase64(f);
+          corrFileName = f.name;
+          corrMimeType = f.type || 'application/octet-stream';
+        }
+
         await postToApi({
           action: 'update3W',
           data: {
@@ -553,7 +597,10 @@
             Corrective_Action: document.getElementById('eAction').value,
             Target_Date: document.getElementById('eTarget').value,
             Actual_Date: document.getElementById('eActual').value,
-            Status: document.getElementById('eStatus').value
+            Status: document.getElementById('eStatus').value,
+            corrFileBase64,
+            corrFileName,
+            corrMimeType
           }
         });
         closeEditModal();

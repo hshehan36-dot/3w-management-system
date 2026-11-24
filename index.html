@@ -61,6 +61,7 @@
     .btn-secondary { background: #e2e8f0; color: #0f172a; }
     .btn-warn { background: #f59e0b; color: #fff; }
     .btn-dark { background: #1e293b; color: #fff; }
+    .btn-admin { background: #fef08a; color: #0f172a; }
     .btn-chip { background: #f1f5f9; color: #0f172a; border: 1px solid var(--border); padding: 6px 10px; font-size: 12px; }
     .btn-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
     .filter-bar {
@@ -71,6 +72,15 @@
     select, input {
       padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff;
     }
+    .multi-select-box {
+      border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px;
+      max-height: 115px; overflow-y: auto; background: #f8fafc;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .multi-item {
+      display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: normal; cursor: pointer;
+    }
+    .multi-item input { margin: 0; cursor: pointer; }
     .main-grid {
       display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; padding: 12px 16px;
     }
@@ -139,6 +149,7 @@
         <span id="currentUserEmail">-</span>
         <span class="role-badge" id="currentUserRole">User</span>
       </div>
+      <button class="btn btn-admin" id="btnOpenAddUser" type="button" style="display:none;" onclick="openAddUserModal()">+ Add User</button>
       <button class="btn btn-primary" id="btnOpenCreate" onclick="openCreateModal()">+ Add New 3W</button>
       <button class="btn btn-secondary" id="btnRefresh" onclick="loadData()">Refresh</button>
       <button class="btn btn-dark" type="button" onclick="logout()">Switch User</button>
@@ -222,6 +233,38 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="addUserModal">
+    <div class="modal">
+      <h3>Add New User (Admin)</h3>
+      <p class="muted" style="margin-top:-4px;">Adds a new user entry to the Users sheet.</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="uName" placeholder="e.g. Nimal Perera" required />
+        </div>
+        <div class="form-group">
+          <label>Email *</label>
+          <input type="email" id="uEmail" placeholder="e.g. nimal@brandix.com" required />
+        </div>
+        <div class="form-group">
+          <label>Role *</label>
+          <select id="uRole">
+            <option value="User">User</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Plant</label>
+          <input type="text" id="uPlant" list="plantDatalist" placeholder="e.g. BCEN" />
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-secondary" type="button" onclick="closeAddUserModal()">Cancel</button>
+        <button class="btn btn-primary" id="btnSubmitUser" type="button" onclick="submitAddUser()">Save User</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="createModal">
     <div class="modal">
       <h3>Add New 3W</h3>
@@ -256,15 +299,15 @@
           <input type="text" id="cObserver" placeholder="Or type Observer name" required />
         </div>
         <div class="form-group">
-          <label>Responsible Person *</label>
-          <select id="cRespSelect" onchange="onResponsibleSelectChange()">
-            <option value="">-- Select from Users --</option>
-          </select>
-          <input type="text" id="cResp" placeholder="Or type Responsible name" required />
+          <label>Responsible Persons (Multiple allowed) *</label>
+          <div class="multi-select-box" id="cRespMultiBox">
+            <span class="muted">Loading users...</span>
+          </div>
+          <input type="text" id="cResp" placeholder="Selected or comma-separated names (e.g. Shehan, Hasitha)" required />
         </div>
         <div class="form-group">
-          <label>Responsible Email</label>
-          <input type="email" id="cRespEmail" placeholder="Auto-filled or enter email" />
+          <label>Responsible Emails (comma-separated)</label>
+          <input type="text" id="cRespEmail" placeholder="Auto-filled or enter emails separated by comma" />
         </div>
         <div class="form-group">
           <label>Target Completion Date</label>
@@ -349,7 +392,7 @@
     const SESSION_KEY = '3w_logged_in_email';
 
     let currentUser = { email: '', name: '', role: 'User' };
-    let ownershipMode = 'all'; // 'all' | 'reported' | 'assigned'
+    let ownershipMode = 'all';
     let allUsers = [];
     let allRecords = [];
     let editingRecord = null;
@@ -366,23 +409,24 @@
       return String(val || '').trim().toLowerCase();
     }
 
+    function splitList(val) {
+      return String(val || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+    }
+
     function resolveUserRole(email, usersList) {
       const target = normalizeEmail(email);
       const found = (usersList || []).find(u => normalizeEmail(u.Email) === target);
       if (found) {
-        const cleanRole = String(found.Role || '').trim() || 'User';
-        const cleanName = String(found.Name || '').trim() || target;
         return {
           email: target,
-          name: cleanName,
-          role: cleanRole
+          name: String(found.Name || '').trim() || target,
+          role: String(found.Role || '').trim() || 'User'
         };
       }
-      return {
-        email: target,
-        name: target,
-        role: 'User'
-      };
+      return { email: target, name: target, role: 'User' };
     }
 
     function isAdminRole(role) {
@@ -401,17 +445,17 @@
     function matchesReportedByMe(r) {
       const myEmail = normalizeEmail(currentUser.email);
       const myName = normalizeEmail(currentUser.name);
-      const obsEmail = normalizeEmail(r.Observer_Email);
-      const obsName = normalizeEmail(r.Observer);
-      return (myEmail && obsEmail && obsEmail === myEmail) || (myName && obsName && obsName === myName);
+      const obsEmails = splitList(r.Observer_Email);
+      const obsNames = splitList(r.Observer);
+      return (myEmail && obsEmails.includes(myEmail)) || (myName && obsNames.includes(myName));
     }
 
     function matchesAssignedToMe(r) {
       const myEmail = normalizeEmail(currentUser.email);
       const myName = normalizeEmail(currentUser.name);
-      const respEmail = normalizeEmail(r.Responsible_Email);
-      const respName = normalizeEmail(r.Responsible_Person);
-      return (myEmail && respEmail && respEmail === myEmail) || (myName && respName && respName === myName);
+      const respEmails = splitList(r.Responsible_Email);
+      const respNames = splitList(r.Responsible_Person);
+      return (myEmail && respEmails.includes(myEmail)) || (myName && respNames.includes(myName));
     }
 
     function handleLogin() {
@@ -437,26 +481,91 @@
     function updateUserHeader() {
       document.getElementById('currentUserEmail').textContent = currentUser.email || '-';
       document.getElementById('currentUserRole').textContent = currentUser.role || 'User';
+      document.getElementById('btnOpenAddUser').style.display = isAdminRole(currentUser.role) ? 'inline-block' : 'none';
       if (currentUser.name && !document.getElementById('cObserver').value) {
         document.getElementById('cObserver').value = currentUser.name;
       }
     }
 
+    function openAddUserModal() {
+      if (!isAdminRole(currentUser.role)) {
+        alert('Only Admin users can add new users.');
+        return;
+      }
+      document.getElementById('addUserModal').style.display = 'flex';
+    }
+
+    function closeAddUserModal() {
+      document.getElementById('addUserModal').style.display = 'none';
+    }
+
+    async function submitAddUser() {
+      if (!isAdminRole(currentUser.role)) {
+        alert('Only Admin users can add new users.');
+        return;
+      }
+      const name = document.getElementById('uName').value.trim();
+      const email = normalizeEmail(document.getElementById('uEmail').value);
+      const role = document.getElementById('uRole').value.trim() || 'User';
+      const plant = document.getElementById('uPlant').value.trim();
+
+      if (!name || !email || !email.includes('@')) {
+        alert('Please enter a valid Name and Email.');
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmitUser');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      setBanner('Adding new user...');
+
+      try {
+        await postToApi({
+          action: 'addUser',
+          data: { Name: name, Email: email, Role: role, Plant: plant }
+        });
+        document.getElementById('uName').value = '';
+        document.getElementById('uEmail').value = '';
+        document.getElementById('uRole').value = 'User';
+        document.getElementById('uPlant').value = '';
+        closeAddUserModal();
+        await loadData();
+        setBanner(`Added user: ${name} (${role})`, 'ok');
+      } catch (err) {
+        console.error(err);
+        setBanner('Add user failed: ' + err.message, 'err');
+        alert('Add user failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save User';
+      }
+    }
+
     function populateUserDropdowns() {
       const obsSel = document.getElementById('cObserverSelect');
-      const respSel = document.getElementById('cRespSelect');
+      const respBox = document.getElementById('cRespMultiBox');
       const plantList = document.getElementById('plantDatalist');
 
       const validUsers = (allUsers || []).filter(u => u.Name || u.Email);
-      const optionsHtml = '<option value="">-- Select from Users --</option>' +
+      obsSel.innerHTML = '<option value="">-- Select from Users --</option>' +
         validUsers.map(u => {
           const name = String(u.Name || u.Email).trim();
           const email = String(u.Email || '').trim();
-          return `<option value="${escapeHtml(name)}" data-email="${escapeHtml(email)}">${escapeHtml(name)}${email ? ' (' + escapeHtml(email) + ')' : ''}</option>`;
+          return `<option value="${escapeHtml(name)}">${escapeHtml(name)}${email ? ' (' + escapeHtml(email) + ')' : ''}</option>`;
         }).join('');
 
-      obsSel.innerHTML = optionsHtml;
-      respSel.innerHTML = optionsHtml;
+      respBox.innerHTML = validUsers.length
+        ? validUsers.map((u, idx) => {
+            const name = String(u.Name || u.Email).trim();
+            const email = String(u.Email || '').trim();
+            return `
+              <label class="multi-item">
+                <input type="checkbox" class="resp-checkbox" data-name="${escapeHtml(name)}" data-email="${escapeHtml(email)}" onchange="onResponsibleMultiChange()" id="respChk_${idx}" />
+                <span>${escapeHtml(name)}${email ? ' <span class="muted">(' + escapeHtml(email) + ')</span>' : ''}</span>
+              </label>
+            `;
+          }).join('')
+        : '<span class="muted">No users found in Users sheet.</span>';
 
       const matchedLoggedUser = validUsers.find(u => normalizeEmail(u.Email) === normalizeEmail(currentUser.email));
       if (matchedLoggedUser && matchedLoggedUser.Name) {
@@ -478,15 +587,12 @@
       }
     }
 
-    function onResponsibleSelectChange() {
-      const sel = document.getElementById('cRespSelect');
-      const selectedOpt = sel.options[sel.selectedIndex];
-      if (sel.value) {
-        document.getElementById('cResp').value = sel.value;
-      }
-      if (selectedOpt && selectedOpt.dataset && selectedOpt.dataset.email) {
-        document.getElementById('cRespEmail').value = selectedOpt.dataset.email;
-      }
+    function onResponsibleMultiChange() {
+      const checked = [...document.querySelectorAll('.resp-checkbox:checked')];
+      const names = checked.map(el => el.dataset.name).filter(Boolean);
+      const emails = checked.map(el => el.dataset.email).filter(Boolean);
+      document.getElementById('cResp').value = names.join(', ');
+      document.getElementById('cRespEmail').value = [...new Set(emails)].join(', ');
     }
 
     function setBanner(msg, type = 'normal') {
@@ -744,8 +850,11 @@
         await postToApi({ action: 'create3W', data });
         document.getElementById('cObs').value = '';
         document.getElementById('cArea').value = '';
+        document.getElementById('cResp').value = '';
+        document.getElementById('cRespEmail').value = '';
         document.getElementById('cTarget').value = '';
         document.getElementById('cFile').value = '';
+        document.querySelectorAll('.resp-checkbox').forEach(cb => cb.checked = false);
         closeCreateModal();
         await loadData();
         setBanner('3W record submitted!', 'ok');

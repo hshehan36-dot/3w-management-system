@@ -21,7 +21,6 @@
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); }
 
-    /* Login Overlay */
     .login-screen {
       position: fixed; inset: 0; background: linear-gradient(135deg, #0f766e, #1e293b);
       display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 16px;
@@ -120,7 +119,6 @@
   </style>
 </head>
 <body>
-  <!-- Login Screen -->
   <div class="login-screen" id="loginScreen">
     <div class="login-card">
       <h2>3W Management System</h2>
@@ -216,7 +214,6 @@
     </div>
   </div>
 
-  <!-- Create Modal -->
   <div class="modal-backdrop" id="createModal">
     <div class="modal">
       <h3>Add New 3W</h3>
@@ -277,7 +274,6 @@
     </div>
   </div>
 
-  <!-- Edit / Update Modal -->
   <div class="modal-backdrop" id="editModal">
     <div class="modal">
       <h3>Update 3W — ID: <span id="eIdTitle"></span></h3>
@@ -357,14 +353,19 @@
       return String(val || '').trim().toLowerCase();
     }
 
+    function normalizeRole(val) {
+      return String(val || '').trim().toLowerCase();
+    }
+
     function resolveUserRole(email, usersList) {
       const target = normalizeEmail(email);
       const found = (usersList || []).find(u => normalizeEmail(u.Email) === target);
       if (found) {
         const cleanRole = String(found.Role || '').trim() || 'User';
+        const cleanName = String(found.Name || '').trim() || target;
         return {
           email: target,
-          name: String(found.Name || '').trim() || target,
+          name: cleanName,
           role: cleanRole
         };
       }
@@ -376,12 +377,12 @@
     }
 
     function isAdminRole(role) {
-      const r = String(role || '').trim().toLowerCase();
-      return r === 'admin' || r === 'gm' || r === 'superadmin';
+      const r = normalizeRole(role);
+      return r === 'admin' || r === 'gm' || r === 'superadmin' || r === 'administrator';
     }
 
     function handleLogin() {
-      const rawEmail = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+      const rawEmail = normalizeEmail(document.getElementById('loginEmailInput').value);
       if (!rawEmail || !rawEmail.includes('@')) {
         alert('Please enter a valid email address.');
         return;
@@ -826,7 +827,7 @@
     }
 
     (function initSession() {
-      const savedEmail = localStorage.getItem(SESSION_KEY);
+      const savedEmail = normalizeEmail(localStorage.getItem(SESSION_KEY));
       if (savedEmail) {
         currentUser = { email: savedEmail, name: savedEmail, role: 'User' };
         updateUserHeader();

@@ -966,14 +966,31 @@
       const rec = allRecords.find(r => String(r.ID) === String(id));
       if (!rec) return;
       editingRecord = rec;
+      const changeCount = Number(rec.Target_Change_Count || 0);
+      const currentTarget = String(rec.Target_Date || '').slice(0, 10);
+
       document.getElementById('eIdTitle').textContent = rec.ID;
       document.getElementById('eObs').value = rec.Observation || '';
       document.getElementById('eAction').value = rec.Corrective_Action || '';
-      document.getElementById('eTarget').value = String(rec.Target_Date || '').slice(0, 10);
+      document.getElementById('eTarget').value = currentTarget;
       document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
       document.getElementById('eStatus').value = rec.Status || 'New';
       document.getElementById('eCorrFile').value = '';
-      document.getElementById('eApprovalStatus').textContent = `Approval Status: ${rec.Approval_Requested || 'No'}`;
+
+      const reqBtn = document.getElementById('btnRequestApproval');
+      const targetInput = document.getElementById('eTarget');
+
+      if (changeCount === 0) {
+        targetInput.disabled = false;
+        reqBtn.style.display = 'none';
+        document.getElementById('eApprovalStatus').textContent =
+          `Approval Status: ${rec.Approval_Requested || 'No'} | First target date change is allowed directly (no approval needed).`;
+      } else {
+        targetInput.disabled = !isAdminRole(currentUser.role);
+        reqBtn.style.display = 'inline-block';
+        document.getElementById('eApprovalStatus').textContent =
+          `Approval Status: ${rec.Approval_Requested || 'No'} | Target date already changed ${changeCount} time(s). Pick the new proposed date and click "Request Approval (Date Change)".`;
+      }
 
       const showAdminDecision = isAdminRole(currentUser.role) &&
         String(rec.Approval_Requested || '').trim().toLowerCase() === 'requested';
@@ -995,6 +1012,15 @@
     async function saveUpdate3W() {
       if (!editingRecord) return;
       const btn = document.getElementById('btnSaveUpdate');
+      const changeCount = Number(editingRecord.Target_Change_Count || 0);
+      const prevTarget = String(editingRecord.Target_Date || '').slice(0, 10);
+      const newTarget = document.getElementById('eTarget').value;
+
+      if (changeCount >= 1 && newTarget && newTarget !== prevTarget && !isAdminRole(currentUser.role)) {
+        alert('Target date has already been changed once. Please choose your new proposed date and click "Request Approval (Date Change)".');
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Saving...';
       try {
@@ -1012,7 +1038,7 @@
           data: {
             ID: editingRecord.ID,
             Corrective_Action: document.getElementById('eAction').value,
-            Target_Date: document.getElementById('eTarget').value,
+            Target_Date: newTarget,
             Actual_Date: document.getElementById('eActual').value,
             Status: document.getElementById('eStatus').value,
             corrFileBase64,
@@ -1034,6 +1060,18 @@
 
     async function requestDateApproval() {
       if (!editingRecord) return;
+      const proposedDate = document.getElementById('eTarget').value;
+      const prevTarget = String(editingRecord.Target_Date || '').slice(0, 10);
+
+      if (!proposedDate) {
+        alert('Please select the new Target Completion Date you want to change to.');
+        return;
+      }
+      if (proposedDate === prevTarget) {
+        alert('Please select a different Target Completion Date than the current target date.');
+        return;
+      }
+
       const btn = document.getElementById('btnRequestApproval');
       btn.disabled = true;
       try {
@@ -1041,14 +1079,14 @@
           action: 'update3W',
           data: {
             ID: editingRecord.ID,
-            Target_Date: document.getElementById('eTarget').value,
+            Target_Date: proposedDate,
             Approval_Requested: 'Requested'
           }
         });
-        alert('Approval request recorded!');
+        alert(`Approval request sent for new target date: ${proposedDate}`);
         closeEditModal();
         await loadData();
-        setBanner(`Approval requested for ID: ${editingRecord.ID}`, 'ok');
+        setBanner(`Approval requested (${proposedDate}) for ID: ${editingRecord.ID}`, 'ok');
       } catch (err) {
         console.error(err);
         alert('Approval request failed: ' + err.message);

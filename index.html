@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3W Management System</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #0f766e;
+      --primary-dark: #115e59;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #cbd5e1;
+      --text: #0f172a;
+      --danger: #dc2626;
+      --warning: #d97706;
+    }
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    header {
+      background: var(--primary); color: #fff; padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    .btn {
+      border: none; padding: 7px 12px; border-radius: 5px; cursor: pointer; font-weight: bold;
+    }
+    .btn-primary { background: #16a34a; color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: #0f172a; }
+    .btn-warn { background: #f59e0b; color: #fff; }
+    .filter-bar {
+      background: #fff; padding: 8px 16px; border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    select, input {
+      padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+    }
+    .main-grid {
+      display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; padding: 12px 16px;
+    }
+    .left-col { display: flex; flex-direction: column; gap: 12px; }
+    .top-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .kpi-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center;
+    }
+    .kpi-val { font-size: 26px; font-weight: bold; margin-top: 4px; }
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .panel {
+      background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+    }
+    .panel h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--primary-dark); }
+    .right-panel {
+      background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+      display: flex; flex-direction: column; gap: 8px; max-height: 78vh; overflow-y: auto;
+    }
+    .id-card {
+      border: 1px solid var(--border); border-left: 4px solid var(--primary);
+      border-radius: 5px; padding: 8px; cursor: pointer; background: #f8fafc;
+    }
+    .id-card:hover { background: #f1f5f9; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid var(--border); padding: 6px; text-align: left; }
+    th { background: #e2e8f0; }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      justify-content: center; align-items: center; z-index: 999;
+    }
+    .modal {
+      background: #fff; width: 92%; max-width: 640px; max-height: 90vh; overflow-y: auto;
+      border-radius: 8px; padding: 16px;
+    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 12px; font-weight: bold; }
+    .full { grid-column: 1 / -1; }
+    .badge-overdue { color: var(--danger); font-weight: bold; }
+    @media (max-width: 900px) {
+      .main-grid, .charts-row, .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>3W Management System</h1>
+    <div>
+      <button class="btn btn-primary" onclick="openCreateModal()">+ Add New 3W</button>
+      <button class="btn btn-secondary" onclick="loadData()">Refresh</button>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+    <select id="fPlant" onchange="renderAll()"><option value="">All Plants</option></select>
+    <select id="fResp" onchange="renderAll()"><option value="">All Responsible</option></select>
+    <select id="fObs" onchange="renderAll()"><option value="">All Observers</option></select>
+    <select id="fStatus" onchange="renderAll()">
+      <option value="">All Status</option>
+      <option value="New">New</option>
+      <option value="Pending">Pending</option>
+      <option value="Completed">Completed</option>
+      <option value="Overdue">Overdue</option>
+    </select>
+    <select id="fReq" onchange="renderAll()"><option value="">All Requirements</option></select>
+  </div>
+
+  <div class="main-grid">
+    <div class="left-col">
+      <div class="top-row">
+        <div class="kpi-card">
+          <div>Total 3Ws</div>
+          <div class="kpi-val" id="kpiTotal">0</div>
+        </div>
+        <div class="kpi-card">
+          <div>Pending</div>
+          <div class="kpi-val" style="color: var(--warning)" id="kpiPending">0</div>
+        </div>
+        <div class="kpi-card">
+          <div>Overdue</div>
+          <div class="kpi-val" style="color: var(--danger)" id="kpiOverdue">0</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="panel">
+          <h3>Completion Status</h3>
+          <canvas id="statusChart" height="150"></canvas>
+        </div>
+        <div class="panel">
+          <h3>By Responsible Person</h3>
+          <canvas id="respChart" height="150"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>3W Tracker Table</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Plant</th><th>Date</th><th>Observation</th>
+                <th>Observer</th><th>Area</th><th>Requirement</th><th>Responsible</th>
+                <th>Target</th><th>Status</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <h3>Find / Update by 3W ID</h3>
+      <input type="text" id="searchId" placeholder="Please Enter 3W ID..." oninput="renderAll()" />
+      <div id="idCardsList"></div>
+    </div>
+  </div>
+
+  <!-- Create Modal -->
+  <div class="modal-backdrop" id="createModal">
+    <div class="modal">
+      <h3>Add New 3W</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Report Date *</label>
+          <input type="date" id="cDate" />
+        </div>
+        <div class="form-group">
+          <label>Plant *</label>
+          <input type="text" id="cPlant" placeholder="e.g. BCEN" />
+        </div>
+        <div class="form-group">
+          <label>Compliance Requirement / Standard</label>
+          <input type="text" id="cReq" placeholder="e.g. ESG Report" />
+        </div>
+        <div class="form-group">
+          <label>Observed Location / Area</label>
+          <input type="text" id="cArea" />
+        </div>
+        <div class="form-group full">
+          <label>Observation Description *</label>
+          <input type="text" id="cObs" />
+        </div>
+        <div class="form-group">
+          <label>Reported By (Observer) *</label>
+          <input type="text" id="cObserver" />
+        </div>
+        <div class="form-group">
+          <label>Responsible Person *</label>
+          <input type="text" id="cResp" />
+        </div>
+        <div class="form-group">
+          <label>Responsible Email</label>
+          <input type="email" id="cRespEmail" />
+        </div>
+        <div class="form-group">
+          <label>Target Completion Date</label>
+          <input type="date" id="cTarget" />
+        </div>
+        <div class="form-group full">
+          <label>Evidence Attachment (Photo/File)</label>
+          <input type="file" id="cFile" />
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCreate3W()">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit / Update Modal -->
+  <div class="modal-backdrop" id="editModal">
+    <div class="modal">
+      <h3>Update 3W — ID: <span id="eIdTitle"></span></h3>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Observation</label>
+          <input type="text" id="eObs" disabled />
+        </div>
+        <div class="form-group full">
+          <label>Corrective Action</label>
+          <input type="text" id="eAction" />
+        </div>
+        <div class="form-group">
+          <label>Target Completion Date</label>
+          <input type="date" id="eTarget" />
+        </div>
+        <div class="form-group">
+          <label>Actual Completion Date</label>
+          <input type="date" id="eActual" />
+        </div>
+        <div class="form-group">
+          <label>Task Status</label>
+          <select id="eStatus">
+            <option value="New">New</option>
+            <option value="Pending">Pending</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="form-group" style="justify-content:flex-end;">
+          <button class="btn btn-warn" onclick="requestDateApproval()">Request Approval (Date Change)</button>
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeEditModal()">Close</button>
+        <button class="btn btn-primary" onclick="saveUpdate3W()">Save Update</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxRYMKGKEfSrxiV1EJ-3vtf9rjVJ-Bz0T655odZDwVQfVG8z-aTzaDsd-HRAxXTqctt/exec';
+    let allRecords = [];
+    let editingRecord = null;
+    let statusChartInst = null;
+    let respChartInst = null;
+
+    document.getElementById('cDate').valueAsDate = new Date();
+
+    function computeEffectiveStatus(r) {
+      if (r.Status === 'Completed') return 'Completed';
+      if (r.Target_Date) {
+        const target = new Date(r.Target_Date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (target < today) return 'Overdue';
+      }
+      return r.Status || 'New';
+    }
+
+    async function loadData() {
+      const res = await fetch(`${API_URL}?action=getAll`);
+      const json = await res.json();
+      if (json.ok) {
+        allRecords = json.records.map(r => ({
+          ...r,
+          Effective_Status: computeEffectiveStatus(r)
+        }));
+        populateFilters();
+        renderAll();
+      }
+    }
+
+    function populateFilters() {
+      fillSelect('fPlant', [...new Set(allRecords.map(r => r.Plant).filter(Boolean))], 'All Plants');
+      fillSelect('fResp', [...new Set(allRecords.map(r => r.Responsible_Person).filter(Boolean))], 'All Responsible');
+      fillSelect('fObs', [...new Set(allRecords.map(r => r.Observer).filter(Boolean))], 'All Observers');
+      fillSelect('fReq', [...new Set(allRecords.map(r => r.Requirement).filter(Boolean))], 'All Requirements');
+    }
+
+    function fillSelect(id, items, defaultLabel) {
+      const sel = document.getElementById(id);
+      const current = sel.value;
+      sel.innerHTML = `<option value="">${defaultLabel}</option>` +
+        items.map(v => `<option value="${v}">${v}</option>`).join('');
+      if (items.includes(current)) sel.value = current;
+    }
+
+    function clearFilters() {
+      ['fPlant', 'fResp', 'fObs', 'fStatus', 'fReq'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('searchId').value = '';
+      renderAll();
+    }
+
+    function getFilteredRecords() {
+      const plant = document.getElementById('fPlant').value;
+      const resp = document.getElementById('fResp').value;
+      const obs = document.getElementById('fObs').value;
+      const status = document.getElementById('fStatus').value;
+      const req = document.getElementById('fReq').value;
+      const qId = document.getElementById('searchId').value.trim().toLowerCase();
+
+      return allRecords.filter(r => {
+        if (plant && r.Plant !== plant) return false;
+        if (resp && r.Responsible_Person !== resp) return false;
+        if (obs && r.Observer !== obs) return false;
+        if (status && r.Effective_Status !== status) return false;
+        if (req && r.Requirement !== req) return false;
+        if (qId && !String(r.ID).toLowerCase().includes(qId)) return false;
+        return true;
+      });
+    }
+
+    function renderAll() {
+      const rows = getFilteredRecords();
+      document.getElementById('kpiTotal').textContent = rows.length;
+      document.getElementById('kpiPending').textContent = rows.filter(r => r.Effective_Status === 'Pending').length;
+      document.getElementById('kpiOverdue').textContent = rows.filter(r => r.Effective_Status === 'Overdue').length;
+
+      document.getElementById('idCardsList').innerHTML = rows.map(r => `
+        <div class="id-card" onclick="openEditModal('${r.ID}')">
+          <strong>ID: ${r.ID}</strong> | ${r.Effective_Status}<br/>
+          <small>Observer: ${r.Observer || '-'} | Responsible: ${r.Responsible_Person || '-'}</small>
+        </div>
+      `).join('');
+
+      document.getElementById('tableBody').innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.ID}</td>
+          <td>${r.Plant || ''}</td>
+          <td>${String(r.Report_Date || '').slice(0, 10)}</td>
+          <td>${r.Observation || ''}</td>
+          <td>${r.Observer || ''}</td>
+          <td>${r.Area || ''}</td>
+          <td>${r.Requirement || ''}</td>
+          <td>${r.Responsible_Person || ''}</td>
+          <td>${String(r.Target_Date || '').slice(0, 10)}</td>
+          <td class="${r.Effective_Status === 'Overdue' ? 'badge-overdue' : ''}">${r.Effective_Status}</td>
+          <td><button class="btn btn-secondary" onclick="openEditModal('${r.ID}')">Edit</button></td>
+        </tr>
+      `).join('');
+
+      renderCharts(rows);
+    }
+
+    function renderCharts(rows) {
+      const statuses = ['New', 'Pending', 'Completed', 'Overdue'];
+      const statusCounts = statuses.map(s => rows.filter(r => r.Effective_Status === s).length);
+
+      if (statusChartInst) statusChartInst.destroy();
+      statusChartInst = new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: {
+          labels: statuses,
+          datasets: [{ data: statusCounts, backgroundColor: ['#0284c7', '#f59e0b', '#16a34a', '#dc2626'] }]
+        }
+      });
+
+      const respNames = [...new Set(rows.map(r => r.Responsible_Person).filter(Boolean))];
+      const respCounts = respNames.map(n => rows.filter(r => r.Responsible_Person === n).length);
+
+      if (respChartInst) respChartInst.destroy();
+      respChartInst = new Chart(document.getElementById('respChart'), {
+        type: 'bar',
+        data: {
+          labels: respNames,
+          datasets: [{ label: '3W Count', data: respCounts, backgroundColor: '#0f766e' }]
+        }
+      });
+    }
+
+    function openCreateModal() { document.getElementById('createModal').style.display = 'flex'; }
+    function closeCreateModal() { document.getElementById('createModal').style.display = 'none'; }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function submitCreate3W() {
+      const fileInput = document.getElementById('cFile');
+      let fileBase64 = '', fileName = '', mimeType = '';
+      if (fileInput.files.length > 0) {
+        const f = fileInput.files[0];
+        fileBase64 = await fileToBase64(f);
+        fileName = f.name;
+        mimeType = f.type || 'application/octet-stream';
+      }
+
+      const data = {
+        Report_Date: document.getElementById('cDate').value,
+        Plant: document.getElementById('cPlant').value,
+        Requirement: document.getElementById('cReq').value,
+        Area: document.getElementById('cArea').value,
+        Observation: document.getElementById('cObs').value,
+        Observer: document.getElementById('cObserver').value,
+        Responsible_Person: document.getElementById('cResp').value,
+        Responsible_Email: document.getElementById('cRespEmail').value,
+        Target_Date: document.getElementById('cTarget').value,
+        Status: 'New',
+        fileBase64, fileName, mimeType
+      };
+
+      await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'create3W', data })
+      });
+
+      closeCreateModal();
+      await loadData();
+    }
+
+    function openEditModal(id) {
+      const rec = allRecords.find(r => String(r.ID) === String(id));
+      if (!rec) return;
+      editingRecord = rec;
+      document.getElementById('eIdTitle').textContent = rec.ID;
+      document.getElementById('eObs').value = rec.Observation || '';
+      document.getElementById('eAction').value = rec.Corrective_Action || '';
+      document.getElementById('eTarget').value = String(rec.Target_Date || '').slice(0, 10);
+      document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
+      document.getElementById('eStatus').value = rec.Status || 'New';
+      document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
+    async function saveUpdate3W() {
+      if (!editingRecord) return;
+      await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'update3W',
+          data: {
+            ID: editingRecord.ID,
+            Corrective_Action: document.getElementById('eAction').value,
+            Target_Date: document.getElementById('eTarget').value,
+            Actual_Date: document.getElementById('eActual').value,
+            Status: document.getElementById('eStatus').value
+          }
+        })
+      });
+      closeEditModal();
+      await loadData();
+    }
+
+    async function requestDateApproval() {
+      if (!editingRecord) return;
+      await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'update3W',
+          data: {
+            ID: editingRecord.ID,
+            Target_Date: document.getElementById('eTarget').value,
+            Approval_Requested: 'Requested'
+          }
+        })
+      });
+      alert('Approval request recorded!');
+      closeEditModal();
+      await loadData();
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

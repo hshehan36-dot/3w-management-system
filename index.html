@@ -20,12 +20,34 @@
     }
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); }
+
+    /* Login Overlay */
+    .login-screen {
+      position: fixed; inset: 0; background: linear-gradient(135deg, #0f766e, #1e293b);
+      display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 16px;
+    }
+    .login-card {
+      background: #fff; width: 100%; max-width: 420px; border-radius: 10px; padding: 24px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+    }
+    .login-card h2 { margin: 0 0 6px 0; color: var(--primary-dark); }
+    .login-card p { margin: 0 0 16px 0; font-size: 13px; color: var(--muted); }
+    .login-card label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
+    .login-card input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 14px; }
+    .login-card button { width: 100%; padding: 10px; font-size: 14px; }
+
     header {
       background: var(--primary); color: #fff; padding: 10px 16px;
       display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
     }
     header h1 { margin: 0; font-size: 18px; }
     .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .user-pill {
+      background: rgba(255,255,255,0.16); padding: 5px 10px; border-radius: 999px; font-size: 12px;
+    }
+    .role-badge {
+      background: #fef08a; color: #0f172a; padding: 2px 7px; border-radius: 999px; font-weight: bold; margin-left: 4px;
+    }
     .status-banner {
       background: #e2e8f0; color: #0f172a; padding: 6px 16px; font-size: 12px;
       display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);
@@ -39,6 +61,7 @@
     .btn-primary { background: var(--success); color: #fff; }
     .btn-secondary { background: #e2e8f0; color: #0f172a; }
     .btn-warn { background: #f59e0b; color: #fff; }
+    .btn-dark { background: #1e293b; color: #fff; }
     .filter-bar {
       background: #fff; padding: 8px 16px; border-bottom: 1px solid var(--border);
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -97,17 +120,33 @@
   </style>
 </head>
 <body>
+  <!-- Login Screen -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <h2>3W Management System</h2>
+      <p>Enter your email to sign in. Role is assigned automatically (default: User).</p>
+      <label for="loginEmailInput">Email Address *</label>
+      <input type="email" id="loginEmailInput" placeholder="name@company.com" required />
+      <button class="btn btn-primary" id="btnLogin" type="button" onclick="handleLogin()">Continue with Email</button>
+    </div>
+  </div>
+
   <header>
     <h1>3W Management System</h1>
     <div class="header-actions">
+      <div class="user-pill">
+        <span id="currentUserEmail">-</span>
+        <span class="role-badge" id="currentUserRole">User</span>
+      </div>
       <button class="btn btn-primary" id="btnOpenCreate" onclick="openCreateModal()">+ Add New 3W</button>
       <button class="btn btn-secondary" id="btnRefresh" onclick="loadData()">Refresh</button>
+      <button class="btn btn-dark" type="button" onclick="logout()">Switch User</button>
     </div>
   </header>
 
   <div class="status-banner" id="statusBanner">
     <span id="statusText">Ready</span>
-    <span id="recordCountLabel" class="muted">Records: 0</span>
+    <span id="recordCountLabel" class="muted">Visible Records: 0</span>
   </div>
 
   <div class="filter-bar">
@@ -296,12 +335,71 @@
 
   <script>
     const API_URL = 'https://script.google.com/macros/s/AKfycbxRYMKGKEfSrxiV1EJ-3vtf9rjVJ-Bz0T655odZDwVQfVG8z-aTzaDsd-HRAxXTqctt/exec';
+    const SESSION_KEY = '3w_logged_in_email';
+
+    let currentUser = { email: '', name: '', role: 'User' };
+    let allUsers = [];
     let allRecords = [];
     let editingRecord = null;
     let statusChartInst = null;
     let respChartInst = null;
 
     document.getElementById('cDate').valueAsDate = new Date();
+
+    function normalizeEmail(val) {
+      return String(val || '').trim().toLowerCase();
+    }
+
+    function resolveUserRole(email, usersList) {
+      const target = normalizeEmail(email);
+      const found = (usersList || []).find(u => normalizeEmail(u.Email) === target);
+      if (found && found.Role) {
+        const cleanRole = String(found.Role).trim();
+        return {
+          email: target,
+          name: found.Name || target,
+          role: cleanRole || 'User'
+        };
+      }
+      return {
+        email: target,
+        name: target,
+        role: 'User'
+      };
+    }
+
+    function isAdminRole(role) {
+      const r = String(role || '').trim().toLowerCase();
+      return r === 'admin' || r === 'gm' || r === 'superadmin';
+    }
+
+    function handleLogin() {
+      const rawEmail = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+      if (!rawEmail || !rawEmail.includes('@')) {
+        alert('Please enter a valid email address.');
+        return;
+      }
+      localStorage.setItem(SESSION_KEY, rawEmail);
+      currentUser = resolveUserRole(rawEmail, allUsers);
+      updateUserHeader();
+      document.getElementById('loginScreen').style.display = 'none';
+      loadData();
+    }
+
+    function logout() {
+      localStorage.removeItem(SESSION_KEY);
+      currentUser = { email: '', name: '', role: 'User' };
+      document.getElementById('loginEmailInput').value = '';
+      document.getElementById('loginScreen').style.display = 'flex';
+    }
+
+    function updateUserHeader() {
+      document.getElementById('currentUserEmail').textContent = currentUser.email || '-';
+      document.getElementById('currentUserRole').textContent = currentUser.role || 'User';
+      if (currentUser.name && !document.getElementById('cObserver').value) {
+        document.getElementById('cObserver').value = currentUser.name;
+      }
+    }
 
     function setBanner(msg, type = 'normal') {
       const banner = document.getElementById('statusBanner');
@@ -321,6 +419,25 @@
         if (!isNaN(target.getTime()) && target < today) return 'Overdue';
       }
       return r.Status || 'New';
+    }
+
+    function getRoleScopedRecords(records) {
+      if (isAdminRole(currentUser.role)) {
+        return records;
+      }
+      const myEmail = normalizeEmail(currentUser.email);
+      const myName = normalizeEmail(currentUser.name);
+
+      return records.filter(r => {
+        const respEmail = normalizeEmail(r.Responsible_Email);
+        const obsEmail = normalizeEmail(r.Observer_Email);
+        const respName = normalizeEmail(r.Responsible_Person);
+        const obsName = normalizeEmail(r.Observer);
+
+        const matchEmail = (respEmail && respEmail === myEmail) || (obsEmail && obsEmail === myEmail);
+        const matchName = (!respEmail && respName && respName === myName) || (!obsEmail && obsName && obsName === myName);
+        return matchEmail || matchName;
+      });
     }
 
     async function postToApi(payloadObj) {
@@ -352,14 +469,23 @@
         if (!json.ok) {
           throw new Error(json.error || 'Failed to load data');
         }
-        allRecords = (json.records || []).map(r => ({
+
+        allUsers = json.users || [];
+        if (currentUser.email) {
+          currentUser = resolveUserRole(currentUser.email, allUsers);
+          updateUserHeader();
+        }
+
+        const withStatus = (json.records || []).map(r => ({
           ...r,
           Effective_Status: computeEffectiveStatus(r)
         }));
-        document.getElementById('recordCountLabel').textContent = `Records: ${allRecords.length}`;
+
+        allRecords = getRoleScopedRecords(withStatus);
+        document.getElementById('recordCountLabel').textContent = `Visible Records: ${allRecords.length} (${currentUser.role})`;
         populateFilters();
         renderAll();
-        setBanner('Connected & up to date', 'ok');
+        setBanner(`Connected (${currentUser.role} access)`, 'ok');
       } catch (err) {
         console.error(err);
         setBanner('Error: ' + err.message, 'err');
@@ -429,7 +555,7 @@
               <small>Observer: ${escapeHtml(String(r.Observer || '-'))} | Responsible: ${escapeHtml(String(r.Responsible_Person || '-'))}</small>
             </div>
           `).join('')
-        : '<p class="muted">No matching 3W records.</p>';
+        : '<p class="muted">No matching 3W records for your access level.</p>';
 
       document.getElementById('tableBody').innerHTML = rows.length
         ? rows.map(r => `
@@ -448,7 +574,7 @@
               <td><button class="btn btn-secondary" onclick="openEditModal('${escapeHtml(String(r.ID))}')">Edit</button></td>
             </tr>
           `).join('')
-        : '<tr><td colspan="12" class="muted">No records found. Click "+ Add New 3W" to create one.</td></tr>';
+        : '<tr><td colspan="12" class="muted">No records available for your account.</td></tr>';
 
       renderCharts(rows);
     }
@@ -524,6 +650,7 @@
           Area: document.getElementById('cArea').value.trim(),
           Observation: obs,
           Observer: observer,
+          Observer_Email: currentUser.email,
           Responsible_Person: resp,
           Responsible_Email: document.getElementById('cRespEmail').value.trim(),
           Target_Date: document.getElementById('cTarget').value,
@@ -640,7 +767,17 @@
       }
     }
 
-    loadData();
+    (function initSession() {
+      const savedEmail = localStorage.getItem(SESSION_KEY);
+      if (savedEmail) {
+        currentUser = { email: savedEmail, name: savedEmail, role: 'User' };
+        updateUserHeader();
+        document.getElementById('loginScreen').style.display = 'none';
+        loadData();
+      } else {
+        document.getElementById('loginScreen').style.display = 'flex';
+      }
+    })();
   </script>
 </body>
 </html>

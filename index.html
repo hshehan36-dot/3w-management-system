@@ -74,7 +74,6 @@
       padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff;
     }
 
-    /* Multi-select Dropdown Styles */
     .ms-wrapper { position: relative; }
     .ms-trigger {
       width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid var(--border);
@@ -499,6 +498,14 @@
     function isAdminRole(role) {
       const r = normalizeRole(role);
       return r === 'admin' || r === 'gm' || r === 'superadmin' || r === 'administrator';
+    }
+
+    function isAssignedResponsibleUser(rec) {
+      const myEmail = normalizeEmail(currentUser.email);
+      const myName = normalizeEmail(currentUser.name);
+      const respEmails = splitList(rec.Responsible_Email);
+      const respNames = splitList(rec.Responsible_Person);
+      return (myEmail && respEmails.includes(myEmail)) || (myName && respNames.includes(myName));
     }
 
     function setOwnershipMode(mode) {
@@ -968,29 +975,25 @@
       editingRecord = rec;
       const changeCount = Number(rec.Target_Change_Count || 0);
       const currentTarget = String(rec.Target_Date || '').slice(0, 10);
+      const reqTarget = String(rec.Requested_Target_Date || '').slice(0, 10);
+      const canRequest = isAssignedResponsibleUser(rec) || isAdminRole(currentUser.role);
 
       document.getElementById('eIdTitle').textContent = rec.ID;
       document.getElementById('eObs').value = rec.Observation || '';
       document.getElementById('eAction').value = rec.Corrective_Action || '';
-      document.getElementById('eTarget').value = currentTarget;
+      document.getElementById('eTarget').value = reqTarget || currentTarget;
       document.getElementById('eActual').value = String(rec.Actual_Date || '').slice(0, 10);
       document.getElementById('eStatus').value = rec.Status || 'New';
       document.getElementById('eCorrFile').value = '';
 
       const reqBtn = document.getElementById('btnRequestApproval');
       const targetInput = document.getElementById('eTarget');
+      targetInput.disabled = false;
+      reqBtn.style.display = canRequest ? 'inline-block' : 'none';
 
-      if (changeCount === 0) {
-        targetInput.disabled = false;
-        reqBtn.style.display = 'none';
-        document.getElementById('eApprovalStatus').textContent =
-          `Approval Status: ${rec.Approval_Requested || 'No'} | First target date change is allowed directly (no approval needed).`;
-      } else {
-        targetInput.disabled = !isAdminRole(currentUser.role);
-        reqBtn.style.display = 'inline-block';
-        document.getElementById('eApprovalStatus').textContent =
-          `Approval Status: ${rec.Approval_Requested || 'No'} | Target date already changed ${changeCount} time(s). Pick the new proposed date and click "Request Approval (Date Change)".`;
-      }
+      const reqInfo = reqTarget ? ` | Requested New Date: ${reqTarget}` : '';
+      document.getElementById('eApprovalStatus').textContent =
+        `Approval Status: ${rec.Approval_Requested || 'No'} | Current Target: ${currentTarget || '-'}${reqInfo} | Changes Used: ${changeCount}`;
 
       const showAdminDecision = isAdminRole(currentUser.role) &&
         String(rec.Approval_Requested || '').trim().toLowerCase() === 'requested';
@@ -1017,7 +1020,7 @@
       const newTarget = document.getElementById('eTarget').value;
 
       if (changeCount >= 1 && newTarget && newTarget !== prevTarget && !isAdminRole(currentUser.role)) {
-        alert('Target date has already been changed once. Please choose your new proposed date and click "Request Approval (Date Change)".');
+        alert('Target date has already been changed once. Please pick your new proposed date and click "Request Approval (Date Change)".');
         return;
       }
 
@@ -1083,7 +1086,7 @@
             Approval_Requested: 'Requested'
           }
         });
-        alert(`Approval request sent for new target date: ${proposedDate}`);
+        alert(`Approval request sent for new target date: ${proposedDate}. Main target date will update once Admin approves.`);
         closeEditModal();
         await loadData();
         setBanner(`Approval requested (${proposedDate}) for ID: ${editingRecord.ID}`, 'ok');
@@ -1102,12 +1105,13 @@
       btnApprove.disabled = true;
       btnReject.disabled = true;
       try {
+        const appliedDate = document.getElementById('eTarget').value || String(editingRecord.Requested_Target_Date || '').slice(0, 10);
         const payloadData = {
           ID: editingRecord.ID,
           Approval_Requested: decision
         };
         if (decision === 'Approved') {
-          payloadData.Target_Date = document.getElementById('eTarget').value;
+          payloadData.Target_Date = appliedDate;
         }
         await postToApi({
           action: 'update3W',

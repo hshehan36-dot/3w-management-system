@@ -300,22 +300,14 @@
     }
 
     async function postToApi(payloadObj) {
-      const res = await fetch(API_URL, {
+      await fetch(API_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payloadObj)
       });
-      const rawText = await res.text();
-      let parsed;
-      try {
-        parsed = JSON.parse(rawText);
-      } catch (e) {
-        throw new Error('Invalid response from server. Check Apps Script deployment access ("Anyone") and authorization.');
-      }
-      if (!parsed.ok) {
-        throw new Error(parsed.error || 'Server returned an error');
-      }
-      return parsed;
+      await new Promise(r => setTimeout(r, 1200));
+      return { ok: true };
     }
 
     async function loadData() {
@@ -512,14 +504,14 @@
           fileBase64, fileName, mimeType
         };
 
-        const result = await postToApi({ action: 'create3W', data });
+        await postToApi({ action: 'create3W', data });
         document.getElementById('cObs').value = '';
         document.getElementById('cArea').value = '';
         document.getElementById('cTarget').value = '';
         document.getElementById('cFile').value = '';
         closeCreateModal();
         await loadData();
-        setBanner(`3W Created! New ID: ${result.record && result.record.ID ? result.record.ID : ''}`, 'ok');
+        setBanner('3W record submitted!', 'ok');
       } catch (err) {
         console.error(err);
         setBanner('Submit failed: ' + err.message, 'err');

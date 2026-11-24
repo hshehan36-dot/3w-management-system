@@ -61,10 +61,13 @@
     .btn-secondary { background: #e2e8f0; color: #0f172a; }
     .btn-warn { background: #f59e0b; color: #fff; }
     .btn-dark { background: #1e293b; color: #fff; }
+    .btn-chip { background: #f1f5f9; color: #0f172a; border: 1px solid var(--border); padding: 6px 10px; font-size: 12px; }
+    .btn-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
     .filter-bar {
       background: #fff; padding: 8px 16px; border-bottom: 1px solid var(--border);
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
     }
+    .quick-group { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     select, input {
       padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff;
     }
@@ -148,7 +151,12 @@
   </div>
 
   <div class="filter-bar">
-    <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+    <div class="quick-group">
+      <button class="btn btn-chip active" id="chipAll" type="button" onclick="setOwnershipMode('all')">All</button>
+      <button class="btn btn-chip" id="chipReported" type="button" onclick="setOwnershipMode('reported')">My Reported</button>
+      <button class="btn btn-chip" id="chipAssigned" type="button" onclick="setOwnershipMode('assigned')">Assigned to Me</button>
+    </div>
+    <button class="btn btn-secondary" type="button" onclick="clearFilters()">Clear</button>
     <select id="fPlant" onchange="renderAll()"><option value="">All Plants</option></select>
     <select id="fResp" onchange="renderAll()"><option value="">All Responsible</option></select>
     <select id="fObs" onchange="renderAll()"><option value="">All Observers</option></select>
@@ -341,6 +349,7 @@
     const SESSION_KEY = '3w_logged_in_email';
 
     let currentUser = { email: '', name: '', role: 'User' };
+    let ownershipMode = 'all'; // 'all' | 'reported' | 'assigned'
     let allUsers = [];
     let allRecords = [];
     let editingRecord = null;
@@ -379,6 +388,30 @@
     function isAdminRole(role) {
       const r = normalizeRole(role);
       return r === 'admin' || r === 'gm' || r === 'superadmin' || r === 'administrator';
+    }
+
+    function setOwnershipMode(mode) {
+      ownershipMode = mode;
+      document.getElementById('chipAll').classList.toggle('active', mode === 'all');
+      document.getElementById('chipReported').classList.toggle('active', mode === 'reported');
+      document.getElementById('chipAssigned').classList.toggle('active', mode === 'assigned');
+      renderAll();
+    }
+
+    function matchesReportedByMe(r) {
+      const myEmail = normalizeEmail(currentUser.email);
+      const myName = normalizeEmail(currentUser.name);
+      const obsEmail = normalizeEmail(r.Observer_Email);
+      const obsName = normalizeEmail(r.Observer);
+      return (myEmail && obsEmail && obsEmail === myEmail) || (myName && obsName && obsName === myName);
+    }
+
+    function matchesAssignedToMe(r) {
+      const myEmail = normalizeEmail(currentUser.email);
+      const myName = normalizeEmail(currentUser.name);
+      const respEmail = normalizeEmail(r.Responsible_Email);
+      const respName = normalizeEmail(r.Responsible_Person);
+      return (myEmail && respEmail && respEmail === myEmail) || (myName && respName && respName === myName);
     }
 
     function handleLogin() {
@@ -480,19 +513,7 @@
       if (isAdminRole(currentUser.role)) {
         return records;
       }
-      const myEmail = normalizeEmail(currentUser.email);
-      const myName = normalizeEmail(currentUser.name);
-
-      return records.filter(r => {
-        const respEmail = normalizeEmail(r.Responsible_Email);
-        const obsEmail = normalizeEmail(r.Observer_Email);
-        const respName = normalizeEmail(r.Responsible_Person);
-        const obsName = normalizeEmail(r.Observer);
-
-        const matchEmail = (respEmail && respEmail === myEmail) || (obsEmail && obsEmail === myEmail);
-        const matchName = (!respEmail && respName && respName === myName) || (!obsEmail && obsName && obsName === myName);
-        return matchEmail || matchName;
-      });
+      return records.filter(r => matchesReportedByMe(r) || matchesAssignedToMe(r));
     }
 
     async function postToApi(payloadObj) {
@@ -574,6 +595,7 @@
     }
 
     function clearFilters() {
+      setOwnershipMode('all');
       ['fPlant', 'fResp', 'fObs', 'fStatus', 'fReq'].forEach(id => document.getElementById(id).value = '');
       document.getElementById('searchId').value = '';
       renderAll();
@@ -588,6 +610,8 @@
       const qId = document.getElementById('searchId').value.trim().toLowerCase();
 
       return allRecords.filter(r => {
+        if (ownershipMode === 'reported' && !matchesReportedByMe(r)) return false;
+        if (ownershipMode === 'assigned' && !matchesAssignedToMe(r)) return false;
         if (plant && r.Plant !== plant) return false;
         if (resp && r.Responsible_Person !== resp) return false;
         if (obs && r.Observer !== obs) return false;
@@ -611,7 +635,7 @@
               <small>Observer: ${escapeHtml(String(r.Observer || '-'))} | Responsible: ${escapeHtml(String(r.Responsible_Person || '-'))}</small>
             </div>
           `).join('')
-        : '<p class="muted">No matching 3W records for your access level.</p>';
+        : '<p class="muted">No matching 3W records for your selection.</p>';
 
       document.getElementById('tableBody').innerHTML = rows.length
         ? rows.map(r => `
@@ -630,7 +654,7 @@
               <td><button class="btn btn-secondary" onclick="openEditModal('${escapeHtml(String(r.ID))}')">Edit</button></td>
             </tr>
           `).join('')
-        : '<tr><td colspan="12" class="muted">No records available for your account.</td></tr>';
+        : '<tr><td colspan="12" class="muted">No records match the active filter.</td></tr>';
 
       renderCharts(rows);
     }
